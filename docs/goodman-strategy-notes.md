@@ -22,6 +22,7 @@ These are original project research notes used to shape the PositionSight AI MVP
 - Exit rules should emphasize quick loss cutting plus trailing logic for winners.
 - Risk percentage and estimated risk amount should stay visible because the MVP is risk-first, not prediction-first.
 - The engine should preserve capital by rejecting excessive risk, unrealistic entry distance, and unclear structure.
+- The UI should teach risk-first thinking to beginners by explaining why a strategy fits, why it is risky, or why no-trade is the better choice.
 
 ## Strategy Type Mapping
 

@@ -1,61 +1,71 @@
 # Demo Script
 
-## 1. Open the App
+## 2-Minute Beginner-Friendly Demo
 
-Start the app with `npm run dev` and open `http://localhost:3000`.
+### 0:00 - 0:15: Scope
 
-Introduce PositionSight AI as a crypto intelligence and strategy skill for the CoinMarketCap x Trust Wallet hackathon.
+Open the app with `npm run dev` and go to `http://localhost:3000`.
 
-## 2. Select a Token
+PositionSight AI is a beginner-friendly crypto strategy skill. It does not trade, connect wallets, or use live API keys yet. It turns a user position plus mock CMC-ready market context into an explainable strategy and backtest-ready JSON.
 
-Use the eligible token selector and choose an asset such as `AVAX`, `ETH`, or `LINK`.
+### 0:15 - 0:40: AVAX Default Scenario
 
-Explain that the first MVP uses a local eligible token list and mock market quotes so the demo is stable before the live CoinMarketCap API is connected.
+Use the default state:
 
-## 3. Enter Position Details
+- Token mode: `Beginner`
+- Token: `AVAX`
+- Entry price: `34`
+- Position size: `2`
+- Timeframe: `4h`
+- Strategy mode: `Auto Recommended`
+- Max risk: `3%`
+
+Show the chart levels: stop loss, invalidation, entry, current price, and take profit. Then point to the market context card: trend, RSI, ATR, sentiment, liquidity, and derivatives bias. Explain that these are mock/proxy fields designed for later CMC mapping.
+
+### 0:40 - 1:00: LINK No-Trade Scenario
+
+Select `LINK` and set entry price to `12`.
+
+This creates a large distance between entry and current mock price. Auto Recommended should reject the setup or show a poor fit because the entry is too far from current price for a clean risk-managed strategy.
+
+Explain that no-trade is a valid risk-management output, especially for beginners.
+
+### 1:00 - 1:20: FET Breakout Scenario
+
+Select `FET`.
 
 Set:
 
-- Entry price.
-- Position size.
-- Timeframe.
-- Max risk percentage.
+- Entry price: `1.37`
+- Position size: `100`
+- Timeframe: `4h`
+- Strategy mode: `Auto Recommended`
+- Max risk: `3%`
 
-The app immediately updates the position view.
+FET has bullish mock trend context, breakout-style close position, stronger momentum, supportive buy pressure, and positive sentiment. Use this to explain breakout + retest logic.
 
-## 4. Review Market Context
+### 1:20 - 1:40: Manual Strategy Selection
 
-Point out:
+Keep `FET` selected and manually choose `Defensive Rebound`.
 
-- Mock current price.
-- 24h change.
-- Market cap.
-- Position value.
-- Profit or loss from entry.
+Show the Fit, Selected by, warnings, and Why this strategy card. Explain that manual mode does not force a poor strategy. It teaches the user when a chosen idea does or does not fit the market context.
 
-## 5. Review the Visual Chart
+### 1:40 - 2:00: JSON Export
 
-Show how the chart places:
+Click `Export JSON`.
 
-- Stop loss.
-- Entry price.
-- Current price.
-- Take profit.
+The filename follows:
 
-This makes the position easier to evaluate than raw numbers alone.
+```text
+positionsight-{SYMBOL}-{TIMEFRAME}-{strategyType}.json
+```
 
-## 6. Explain the Strategy Signal
+The export includes:
 
-Review the generated strategy type and the entry and exit conditions.
+- `strategySpec`
+- strategy decision metadata
+- mock `marketContext`
+- explanation
+- warnings
 
-Mention that the MVP supports trend-following pullback, breakout with volume, defensive mean reversion, and no-trade outcomes.
-
-## 7. Export Backtest JSON
-
-Use the export button to download the JSON strategy specification.
-
-Explain that this output is designed to be passed into a backtesting workflow, analytics notebook, or future autonomous agent layer.
-
-## 8. Close With Scope
-
-PositionSight AI does not trade, connect wallets, or expose exchange actions. It provides explainable position intelligence and backtest-ready strategy specs from market data.
+Close by noting that Day 3 can connect server-only CoinMarketCap data while preserving mock fallback for demo reliability.
