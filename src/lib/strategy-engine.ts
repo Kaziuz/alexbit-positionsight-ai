@@ -14,20 +14,63 @@ function roundPrice(value: number) {
 
 function getStrategyType(position: PositionInput, quote: MarketQuote, pnlPercentage: number): StrategyType {
   const absoluteMoveFromEntry = Math.abs(pnlPercentage);
+  const riskControlled = position.maxRiskPercentage <= 4;
+  const ultraShortTimeframe = position.timeframe === "15m";
+  const clearUltraShortBreakout =
+    riskControlled &&
+    quote.price > position.entryPrice &&
+    quote.percentChange24h >= 3.5 &&
+    quote.volume24h >= 500_000_000 &&
+    absoluteMoveFromEntry <= position.maxRiskPercentage * 1.5;
 
-  if (position.maxRiskPercentage > 8 || absoluteMoveFromEntry > position.maxRiskPercentage * 2.5) {
+  if (
+    position.maxRiskPercentage > 6 ||
+    absoluteMoveFromEntry > position.maxRiskPercentage * 2 ||
+    (Math.abs(quote.percentChange24h) < 0.5 && absoluteMoveFromEntry < position.maxRiskPercentage) ||
+    (ultraShortTimeframe && !clearUltraShortBreakout)
+  ) {
     return "no_trade";
   }
 
-  if (quote.percentChange24h > 2.5 && quote.volume24h > 500_000_000) {
+  if (quote.price > position.entryPrice && quote.percentChange24h > 2.5 && quote.volume24h > 500_000_000) {
     return "breakout_with_volume";
   }
 
-  if (pnlPercentage < -position.maxRiskPercentage * 0.75 || quote.percentChange24h < -1.5) {
+  if (!riskControlled && (pnlPercentage < position.maxRiskPercentage * 0.5 || quote.percentChange24h < -1.5)) {
+    return "no_trade";
+  }
+
+  if (riskControlled && (pnlPercentage < position.maxRiskPercentage * 0.5 || quote.percentChange24h < -1.5)) {
     return "defensive_mean_reversion";
   }
 
   return "trend_following_pullback";
+}
+
+function getNoTradeReason(position: PositionInput, quote: MarketQuote, pnlPercentage: number) {
+  const absoluteMoveFromEntry = Math.abs(pnlPercentage);
+
+  if (position.timeframe === "15m") {
+    return "The 15m timeframe is too speculative for this MVP unless momentum, volume, and risk are exceptionally clear.";
+  }
+
+  if (position.maxRiskPercentage > 6) {
+    return "Configured risk is too high for a capital-preservation strategy.";
+  }
+
+  if (position.maxRiskPercentage > 4 && (pnlPercentage < position.maxRiskPercentage * 0.5 || quote.percentChange24h < -1.5)) {
+    return "Risk is not controlled enough for a defensive setup while market pressure is elevated.";
+  }
+
+  if (absoluteMoveFromEntry > position.maxRiskPercentage * 2) {
+    return "Current price is too far from entry to create a realistic risk-managed setup.";
+  }
+
+  if (Math.abs(quote.percentChange24h) < 0.5 && absoluteMoveFromEntry < position.maxRiskPercentage) {
+    return "Market structure is unclear, so waiting for a stronger timeframe close is preferred.";
+  }
+
+  return "Risk or market structure is unclear for a fresh strategy signal.";
 }
 
 export function generateStrategySpec(position: PositionInput, quote: MarketQuote): StrategySpec {
@@ -43,22 +86,25 @@ export function generateStrategySpec(position: PositionInput, quote: MarketQuote
   const copy = {
     trend_following_pullback: {
       entryCondition:
-        "Wait for price to hold above entry after a shallow pullback and confirm momentum with a higher low.",
-      exitCondition: "Exit on stop loss, take profit, or a close below invalidation level.",
+        "Wait for a confirmed higher close or retest above the trend area before treating the pullback as a continuation setup.",
+      exitCondition:
+        "Cut the trade at invalidation, take partial profit at target, and trail any runner while price holds above the trend filter.",
     },
     breakout_with_volume: {
       entryCondition:
-        "Enter only if price confirms strength above current price with elevated volume versus the 24h baseline.",
-      exitCondition: "Trail risk after a confirmed breakout, then exit on take profit or failed retest.",
+        "Enter only after breakout strength is confirmed by volume and price holds or retests above the breakout area.",
+      exitCondition:
+        "Exit on a failed retest, stop loss, or period close below invalidation; trail winners instead of closing too early.",
     },
     defensive_mean_reversion: {
       entryCondition:
-        "Do not add exposure unless price stabilizes near support and recovers above entry with reduced downside pressure.",
-      exitCondition: "Reduce or close exposure if price loses the stop level or fails to reclaim entry.",
+        "Do not add exposure unless risk is controlled and price stabilizes near support with evidence of a rebound.",
+      exitCondition:
+        "Reduce quickly if price loses the stop level, and only hold for recovery if a higher timeframe close confirms support.",
     },
     no_trade: {
-      entryCondition: "No new entry. Position risk is outside the configured limit.",
-      exitCondition: "Wait for volatility and downside exposure to return inside risk constraints.",
+      entryCondition: "No new entry. Wait for clearer trend confirmation on a higher timeframe.",
+      exitCondition: "Reconsider only after risk, entry distance, and market structure return inside controlled limits.",
     },
   } satisfies Record<StrategyType, { entryCondition: string; exitCondition: string }>;
 
@@ -77,7 +123,7 @@ export function generateStrategySpec(position: PositionInput, quote: MarketQuote
       estimatedRiskAmount,
       noTradeReason:
         strategyType === "no_trade"
-          ? "Configured risk is high or current price is too far from entry for a fresh strategy signal."
+          ? getNoTradeReason(position, quote, pnlPercentage)
           : undefined,
     },
     dataUsed: {

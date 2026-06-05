@@ -2,6 +2,8 @@
 
 PositionSight AI is an AI-powered crypto intelligence and strategy skill.
 
+The strategy engine is Goodman-inspired: it favors patient trend confirmation, breakout/retest structure, trailing exits, quick invalidation, and capital preservation over day trading or constant signal generation.
+
 The goal is to help users convert a crypto position, market data, and risk profile into a clear, explainable, and backtestable trading strategy.
 
 This project is not a live trading bot and does not provide financial advice. It is a decision-support and educational tool for strategy generation, risk visualization, and structured backtesting.
@@ -84,67 +86,67 @@ Future versions may include:
 
 ### 1. Trend-Following Pullback
 
-Used when the asset is in a constructive trend and risk remains controlled.
+Used as a trend-confirmation setup when the asset is in a constructive trend and risk remains controlled.
 
 Conditions:
 
-* Price remains above a key trend area.
-* Momentum is positive but not overextended.
+* Price remains above entry or a key trend area.
+* Momentum is constructive but not overextended.
 * Entry price is close enough to the current market structure.
 * Risk-to-reward remains acceptable.
 
 Output:
 
-* Suggested hold or continuation setup.
+* Suggested hold or continuation setup after confirmation.
 * Stop loss below support or structural invalidation.
 * Take profit using a simple reward-to-risk multiple.
-* Invalidation level below the thesis structure.
+* Invalidation level below the thesis structure, with room to trail winners.
 
 ---
 
 ### 2. Breakout With Volume
 
-Used when price shows strong positive movement and volume confirms momentum.
+Used when price shows strong positive movement, volume confirms momentum, and the setup can be framed as a breakout followed by a retest or failure level.
 
 Conditions:
 
 * 24h move is strongly positive.
 * Volume is elevated.
-* Price action suggests continuation.
+* Price action suggests continuation after breakout confirmation.
 * Risk-to-reward is acceptable.
 
 Output:
 
-* Breakout continuation setup.
+* Breakout continuation setup with retest confirmation.
 * Stop loss below breakout or invalidation zone.
 * Take profit based on risk multiple.
-* Exit if breakout fails.
+* Exit if breakout fails or a period close loses the retest area.
 
 ---
 
 ### 3. Defensive Mean Reversion
 
-Used when a position is under pressure but may be near a potential rebound area.
+Used conservatively when a position is under pressure or recent movement is weak, but risk remains controlled.
 
 Conditions:
 
 * Current price is below or near the user entry.
 * 24h movement is materially negative.
 * The asset may be oversold or extended.
-* Risk remains controlled.
+* Risk remains controlled enough to avoid turning a small loss into a large one.
 
 Output:
 
 * Defensive rebound setup.
 * Conservative stop loss.
 * Partial recovery target.
-* Clear invalidation level.
+* Clear invalidation level and quick loss-cutting rule.
 
 ---
 
 ### 4. No-Trade Signal
 
-Used when conditions are unclear or risk is too high.
+Used when conditions are unclear, risk is too high, or the requested setup is too speculative for the MVP framework.
 
 Conditions:
 
@@ -153,12 +155,13 @@ Conditions:
 * Price movement is extreme.
 * Signals conflict.
 * Risk-to-reward is poor.
+* The user selects a `15m` timeframe without unusually clear momentum, volume, and controlled risk.
 
 Output:
 
 * No-trade recommendation.
 * Reason for invalid setup.
-* Conditions needed before reconsidering.
+* Conditions needed before reconsidering, usually on a higher timeframe close.
 
 This is an important part of PositionSight AI because avoiding bad trades is part of risk management.
 
@@ -166,12 +169,12 @@ This is an important part of PositionSight AI because avoiding bad trades is par
 
 ## Current MVP Strategy Selection Logic
 
-The current MVP uses deterministic rules:
+The current MVP uses deterministic, Goodman-inspired rules:
 
-* `no_trade`: Risk setting is high or current price is too far from entry.
-* `breakout_with_volume`: 24h change is strongly positive and volume is elevated.
-* `defensive_mean_reversion`: Position is under pressure or the 24h move is materially negative.
-* `trend_following_pullback`: Default strategy when risk is controlled and momentum is not extreme.
+* `no_trade`: Risk setting is high, current price is too far from entry, structure is unclear, or the `15m` timeframe is speculative.
+* `breakout_with_volume`: 24h change is strongly positive, volume is elevated, and price is above entry so a breakout/retest setup is plausible.
+* `defensive_mean_reversion`: Position is under pressure or the 24h move is materially negative, but risk is still controlled.
+* `trend_following_pullback`: Default trend-confirmation setup when risk is controlled and momentum is constructive but not extreme.
 
 These rules are intentionally simple for the first hackathon milestone. They make the output explainable and easy to replace with a more advanced AI strategy generator later.
 
@@ -183,12 +186,12 @@ These rules are intentionally simple for the first hackathon milestone. They mak
 {
   "asset": "AVAX",
   "timeframe": "4h",
-  "strategyType": "trend_following_pullback",
-  "entryCondition": "Wait for price to hold above entry after a shallow pullback and confirm momentum with a higher low.",
-  "exitCondition": "Exit on stop loss, take profit, or a close below invalidation level.",
+  "strategyType": "defensive_mean_reversion",
+  "entryCondition": "Do not add exposure unless risk is controlled and price stabilizes near support with evidence of a rebound.",
+  "exitCondition": "Reduce quickly if price loses the stop level, and only hold for recovery if a higher timeframe close confirms support.",
   "stopLoss": 32.98,
   "takeProfit": 35.84,
-  "invalidationLevel": 32.82,
+  "invalidationLevel": 32.98,
   "riskRules": {
     "maxRiskPercentage": 3,
     "positionSize": 2,
@@ -198,7 +201,7 @@ These rules are intentionally simple for the first hackathon milestone. They mak
     "entryPrice": 34,
     "currentPrice": 35.62,
     "percentChange24h": -2.78,
-    "volume24h": 426000000,
+    "volume24h": 525000000,
     "marketCap": 13900000000,
     "source": "mock",
     "lastUpdated": "2026-06-05T00:00:00.000Z"
