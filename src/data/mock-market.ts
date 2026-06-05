@@ -1,47 +1,12 @@
 import type { MarketQuote } from "@/types/strategy";
 
 const mockQuotes: Record<string, Omit<MarketQuote, "lastUpdated" | "source">> = {
-  BTC: {
-    symbol: "BTC",
-    price: 68150.2,
-    percentChange24h: 1.82,
-    volume24h: 34850000000,
-    marketCap: 1342000000000,
-  },
   ETH: {
     symbol: "ETH",
     price: 3550.74,
     percentChange24h: 0.94,
     volume24h: 16840000000,
     marketCap: 426900000000,
-  },
-  BNB: {
-    symbol: "BNB",
-    price: 612.36,
-    percentChange24h: -0.48,
-    volume24h: 1680000000,
-    marketCap: 94000000000,
-  },
-  SOL: {
-    symbol: "SOL",
-    price: 151.82,
-    percentChange24h: 3.21,
-    volume24h: 4140000000,
-    marketCap: 70300000000,
-  },
-  ARB: {
-    symbol: "ARB",
-    price: 1.08,
-    percentChange24h: -1.12,
-    volume24h: 340000000,
-    marketCap: 3200000000,
-  },
-  MATIC: {
-    symbol: "MATIC",
-    price: 0.72,
-    percentChange24h: 0.36,
-    volume24h: 287000000,
-    marketCap: 7130000000,
   },
   LINK: {
     symbol: "LINK",
@@ -64,6 +29,55 @@ const mockQuotes: Record<string, Omit<MarketQuote, "lastUpdated" | "source">> = 
     volume24h: 174000000,
     marketCap: 5600000000,
   },
+  AAVE: {
+    symbol: "AAVE",
+    price: 287.42,
+    percentChange24h: 1.74,
+    volume24h: 386000000,
+    marketCap: 4340000000,
+  },
+  ATOM: {
+    symbol: "ATOM",
+    price: 6.84,
+    percentChange24h: -0.62,
+    volume24h: 164000000,
+    marketCap: 2670000000,
+  },
+  FIL: {
+    symbol: "FIL",
+    price: 4.72,
+    percentChange24h: -1.48,
+    volume24h: 214000000,
+    marketCap: 2960000000,
+  },
+  INJ: {
+    symbol: "INJ",
+    price: 28.16,
+    percentChange24h: 3.35,
+    volume24h: 228000000,
+    marketCap: 2770000000,
+  },
+  CAKE: {
+    symbol: "CAKE",
+    price: 2.91,
+    percentChange24h: 2.06,
+    volume24h: 74000000,
+    marketCap: 848000000,
+  },
+  TWT: {
+    symbol: "TWT",
+    price: 1.13,
+    percentChange24h: 0.78,
+    volume24h: 27000000,
+    marketCap: 471000000,
+  },
+  FET: {
+    symbol: "FET",
+    price: 1.42,
+    percentChange24h: 2.91,
+    volume24h: 182000000,
+    marketCap: 3600000000,
+  },
   DOGE: {
     symbol: "DOGE",
     price: 0.148,
@@ -77,13 +91,6 @@ const mockQuotes: Record<string, Omit<MarketQuote, "lastUpdated" | "source">> = 
     percentChange24h: -0.82,
     volume24h: 412000000,
     marketCap: 14100000000,
-  },
-  NEAR: {
-    symbol: "NEAR",
-    price: 6.2,
-    percentChange24h: 2.68,
-    volume24h: 381000000,
-    marketCap: 6700000000,
   },
 };
 

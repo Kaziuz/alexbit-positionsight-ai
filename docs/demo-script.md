@@ -8,7 +8,7 @@ Introduce PositionSight AI as a crypto intelligence and strategy skill for the C
 
 ## 2. Select a Token
 
-Use the eligible token selector and choose an asset such as `BNB`, `BTC`, or `SOL`.
+Use the eligible token selector and choose an asset such as `AVAX`, `ETH`, or `LINK`.
 
 Explain that the first MVP uses a local eligible token list and mock market quotes so the demo is stable before the live CoinMarketCap API is connected.
 

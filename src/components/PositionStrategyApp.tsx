@@ -12,8 +12,8 @@ import { PricePositionChart } from "./PricePositionChart";
 const timeframes: Timeframe[] = ["15m", "1h", "4h", "1d"];
 
 const initialPosition: PositionInput = {
-  symbol: "BNB",
-  entryPrice: 585,
+  symbol: "AVAX",
+  entryPrice: 34,
   positionSize: 2,
   timeframe: "4h",
   maxRiskPercentage: 3,
