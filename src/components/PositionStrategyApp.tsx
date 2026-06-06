@@ -170,9 +170,12 @@ export function PositionStrategyApp() {
     quote && normalizedPosition
       ? Math.abs((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) > 0.5
       : false;
-  const warningMessages = entryDistanceWarning
-    ? ["Entry price is very far from current price. This may be an old position or a typo."]
-    : [];
+  const warningMessages = [
+    ...(entryDistanceWarning
+      ? ["Entry price is very far from current price. This may be an old position or a typo."]
+      : []),
+    ...(marketContext?.warnings ?? []),
+  ];
 
   useEffect(() => {
     let isActive = true;
@@ -264,14 +267,16 @@ export function PositionStrategyApp() {
             visual risk levels, and backtest-ready strategy exports.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[540px]">
-          <MetricTile label="Selected asset" value={`${selectedToken.symbol} / USD`} />
-          <MetricTile label="Source" value={!quote || quote.source === "mock" ? "Mock data" : "CMC"} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:w-[860px] xl:grid-cols-6">
+          <MetricTile label="Current price" value={quote ? formatCurrency(quote.price, pricePrecision) : "--"} />
           <MetricTile
             label="24h move"
             value={quote ? formatPercentage(quote.percentChange24h) : "--"}
             tone={quote && quote.percentChange24h < 0 ? "negative" : "positive"}
           />
+          <MetricTile label="Volume 24h" value={quote ? formatCompact(quote.volume24h) : "--"} />
+          <MetricTile label="Market cap" value={quote?.marketCap ? formatCompact(quote.marketCap) : "Unavailable"} />
+          <MetricTile label="Source" value={!quote || quote.source === "mock" ? "Mock data fallback" : "CMC live quote"} />
           <MetricTile
             label="P/L"
             value={quote && isPositionValid ? `${formatPercentage(pnlPercentage)} ${formatCurrency(pnlAmount)}` : "--"}
@@ -492,7 +497,7 @@ export function PositionStrategyApp() {
                 Entry vs current price
               </div>
               <div className="text-sm text-slate-500">
-                {isLoadingContext ? "Loading mock context..." : contextError ?? "Mock context ready"}
+                {isLoadingContext ? "Loading market context..." : contextError ?? "Market context ready"}
               </div>
             </div>
 
@@ -525,7 +530,9 @@ export function PositionStrategyApp() {
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-lg font-semibold text-ink">Market context</div>
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Mock/proxy fields for future CMC mapping
+                  {marketContext.source === "coinmarketcap"
+                    ? "CoinMarketCap live quote; proxy context fields"
+                    : "Mock data fallback"}
                 </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -536,6 +543,16 @@ export function PositionStrategyApp() {
                 <MetricTile label="Liquidity" value={`${marketContext.orderBook.liquidityScore}/100`} />
                 <MetricTile label="Derivatives" value={marketContext.derivatives.longShortBias} />
               </div>
+              {marketContext.warnings?.length ? (
+                <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+                  <div className="font-semibold">Data note</div>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    {marketContext.warnings.map((warning, index) => (
+                      <li key={`${warning}-${index}`}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -559,7 +576,10 @@ export function PositionStrategyApp() {
                   <MetricTile label="Fit" value={strategyDecision.fit} tone={getFitTone(strategyDecision.fit)} />
                   <MetricTile label="Selected by" value={strategyDecision.selectedBy === "auto" ? "Auto" : "User"} />
                   <MetricTile label="Estimated risk" value={formatCurrency(strategy.riskRules.estimatedRiskAmount)} />
-                  <MetricTile label="Data source" value={strategy.dataUsed.source === "mock" ? "Mock data" : "CoinMarketCap"} />
+                  <MetricTile
+                    label="Data source"
+                    value={strategy.dataUsed.source === "mock" ? "Mock data fallback" : "CoinMarketCap live quote"}
+                  />
                 </div>
 
                 <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">

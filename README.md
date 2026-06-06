@@ -13,13 +13,13 @@ PositionSight AI fits the Crypto Intelligence / Strategy Skill direction by comb
 - Explainable strategy generation for risk-aware decisions.
 - Structured JSON output that can be consumed by backtesting tools.
 
-The first MVP uses mock market data so the UI works locally before real CoinMarketCap API keys are configured.
+The MVP uses server-only CoinMarketCap latest quotes when a local API key is configured, and safely falls back to mock market data when live quotes are unavailable.
 
 ## Current MVP Features
 
 - Local eligible token selector.
 - Position form for token, entry price, position size, timeframe, and max risk percentage.
-- Mock quote endpoint with current price, 24h change, volume, and market cap.
+- Server-side market endpoint with CoinMarketCap latest quote support and mock fallback.
 - Entry price vs current price chart.
 - Suggested stop loss and take profit levels.
 - Deterministic strategy engine with:
@@ -28,7 +28,7 @@ The first MVP uses mock market data so the UI works locally before real CoinMark
   - Defensive mean reversion.
   - No-trade signal when risk is too high.
 - Backtest-ready JSON preview and export.
-- Server API routes for future CoinMarketCap and strategy generation integration.
+- Server API routes for CoinMarketCap quotes and strategy output.
 
 ## Tech Stack
 
@@ -40,16 +40,23 @@ The first MVP uses mock market data so the UI works locally before real CoinMark
 
 ## Getting Started
 
-Install dependencies:
-
-```bash
-npm install
-```
-
 Create a local environment file:
 
 ```bash
 cp .env.example .env.local
+```
+
+Add your CoinMarketCap API key to `.env.local`:
+
+```bash
+CMC_API_KEY=your_coinmarketcap_api_key_here
+CMC_API_BASE_URL=https://pro-api.coinmarketcap.com
+```
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
 Run the development server:
@@ -65,11 +72,11 @@ Open [http://localhost:3000](http://localhost:3000).
 `.env.local` is used for secrets and must not be committed.
 
 ```bash
-COINMARKETCAP_API_KEY=replace_with_your_cmc_api_key
+CMC_API_KEY=your_coinmarketcap_api_key_here
 CMC_API_BASE_URL=https://pro-api.coinmarketcap.com
 ```
 
-The current app intentionally uses mock market data. A future integration should call CoinMarketCap from server routes only and never expose API keys to the browser.
+The app calls CoinMarketCap only from server routes and never exposes `CMC_API_KEY` to browser code. If `CMC_API_KEY` is missing or CoinMarketCap is unavailable, the app uses mock data fallback for demo reliability.
 
 ## Project Structure
 

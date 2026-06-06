@@ -23,6 +23,7 @@ export type TokenCategory =
 
 export type EligibleToken = {
   id: number;
+  cmcId?: number;
   symbol: string;
   name: string;
   category: TokenCategory;
@@ -42,6 +43,17 @@ export type MarketQuote = {
 export type MarketContext = {
   symbol: string;
   source: "mock" | "coinmarketcap";
+  warnings?: string[];
+  diagnostics?: {
+    hasCmcApiKey: boolean;
+    cmcRequestMode: "id" | "symbol";
+    cmcId?: number;
+    cmcStatus?: number;
+    cmcErrorCode?: string | number;
+    cmcErrorMessage?: string;
+    parserError?: string;
+    parsedLiveQuote?: boolean;
+  };
   quote: {
     price: number;
     percentChange24h: number;
@@ -188,7 +200,7 @@ export type StrategyExport = {
   ];
   validation: {
     backtestReady: true;
-    limitations: ["mock data", "not financial advice", "no live execution"];
+    limitations: string[];
   };
   strategySpec: StrategySpec;
   strategyDecision: Omit<StrategyDecision, "spec">;

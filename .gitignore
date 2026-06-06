@@ -10,6 +10,7 @@ build/
 
 # local env files
 .env
+.env.example
 .env*.local
 
 # type/build caches
@@ -25,5 +26,4 @@ pnpm-debug.log*
 .DS_Store
 
 # other files
-.env.example
 plan.md

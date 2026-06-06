@@ -167,9 +167,10 @@ export type EligibleTokenSymbol = (typeof eligibleTokenSymbols)[number];
 
 const beginnerSymbols = new Set(["ETH", "AVAX", "LINK", "AAVE", "UNI", "ATOM", "CAKE", "TWT", "FET", "DOGE", "SHIB"]);
 
-function token(id: number, symbol: string, name: string, category: TokenCategory): EligibleToken {
+function token(id: number, symbol: string, name: string, category: TokenCategory, cmcId = id < 900000 ? id : undefined): EligibleToken {
   return {
     id,
+    cmcId,
     symbol,
     name,
     category,

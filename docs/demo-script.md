@@ -6,7 +6,9 @@
 
 Open the app with `npm run dev` and go to `http://localhost:3000`.
 
-PositionSight AI is a beginner-friendly crypto strategy skill. It does not trade, connect wallets, or use live API keys yet. It turns a user position plus mock CMC-ready market context into an explainable strategy and backtest-ready JSON.
+PositionSight AI is a beginner-friendly crypto strategy skill. It does not trade or connect wallets. It turns a user position plus CMC-ready market context into an explainable strategy and backtest-ready JSON.
+
+If `CMC_API_KEY` is configured, the app uses CoinMarketCap live quote data. Otherwise, it safely falls back to mock data.
 
 ### 0:15 - 0:40: AVAX Default Scenario
 
@@ -68,4 +70,4 @@ The export includes:
 - explanation
 - warnings
 
-Close by noting that Day 3 can connect server-only CoinMarketCap data while preserving mock fallback for demo reliability.
+Close by noting that the export records whether the quote source was CoinMarketCap live data or mock fallback.

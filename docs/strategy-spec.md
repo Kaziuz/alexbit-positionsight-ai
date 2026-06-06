@@ -94,7 +94,7 @@ Top-level fields:
 * `validation`: Backtest readiness and limitations.
 * `strategySpec`: Stable human-readable strategy specification.
 * `strategyDecision`: User/auto selection metadata and warnings.
-* `marketContext`: Mock CMC-ready context used to produce the strategy.
+* `marketContext`: CMC-ready context used to produce the strategy. Latest quote fields may come from CoinMarketCap live quotes or mock fallback.
 * `explanation`: Human-readable explanation.
 * `warnings`: Human-readable warnings.
 
@@ -152,11 +152,27 @@ Auto is the default because the MVP is designed for beginners.
 
 ## Market Data
 
-The MVP currently supports mock market data for local testing.
+The MVP supports a server-only CoinMarketCap latest quote integration with mock fallback.
 
-The next milestone is to add a server-only CoinMarketCap integration so the app can fetch live quote data without exposing API keys on the client.
+The app calls:
 
-The current mock model is CMC-ready and grouped as `MarketContext`:
+```text
+GET https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest
+```
+
+from a Next.js API route only. The browser never receives `CMC_API_KEY`.
+
+When `CMC_API_KEY` is configured and CoinMarketCap responds successfully, `MarketContext.source` is `coinmarketcap` and the quote fields use live latest quote data:
+
+* Current price
+* 24h percent change
+* 24h volume
+* Market cap when available
+* Last updated timestamp
+
+When the key is missing or the request fails, `MarketContext.source` is `mock` and the route returns deterministic mock data with a fallback warning.
+
+The current model is CMC-ready and grouped as `MarketContext`:
 
 * `quote`: Current price, 24h change, 24h volume, market cap, timestamp, and source.
 * `technicals`: EMA proxy values, RSI, ATR, support, resistance, trend state, and close-position state.
@@ -164,7 +180,7 @@ The current mock model is CMC-ready and grouped as `MarketContext`:
 * `orderBook`: Mock/proxy spread, buy pressure, sell pressure, and liquidity score.
 * `derivatives`: Mock/proxy funding bias, open-interest change, and long/short bias.
 
-Important: order book and derivatives fields are mock/proxy fields for now. They are included so future real CMC quotes, OHLCV, market-pair liquidity, news/community signals, and other available data can be mapped into the same shape.
+Important: the latest quote endpoint does not provide the full technical, sentiment, order book, or derivatives model. Those fields remain mock/proxy context for now even when the latest quote itself is live. They are included so future real CMC quotes, OHLCV, market-pair liquidity, news/community signals, and other available data can be mapped into the same shape.
 
 Future versions may include:
 

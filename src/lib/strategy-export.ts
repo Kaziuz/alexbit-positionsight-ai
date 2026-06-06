@@ -173,6 +173,11 @@ export function createStrategyExport(
   decision: StrategyDecision,
   context: MarketContext,
 ): StrategyExport {
+  const limitations =
+    context.source === "mock"
+      ? ["mock data", "not financial advice", "no live execution"]
+      : ["not financial advice", "no live execution", "technical and sentiment fields are proxy context"];
+
   return {
     schemaVersion: "1.0.0",
     skill: {
@@ -212,7 +217,7 @@ export function createStrategyExport(
     ],
     validation: {
       backtestReady: true,
-      limitations: ["mock data", "not financial advice", "no live execution"],
+      limitations,
     },
     strategySpec: decision.spec,
     strategyDecision: {
