@@ -1,44 +1,56 @@
 # PositionSight AI
 
-PositionSight AI is a focused hackathon MVP for **BNB Hack: AI Trading Agent Edition - CoinMarketCap x Trust Wallet**.
+A CoinMarketCap-powered crypto strategy skill that converts market context and user position data into an explainable, risk-aware, backtest-ready trading strategy specification.
 
-It is an AI-powered crypto strategy skill, not a live trading bot and not a Binance frontend. The app helps a user select an eligible crypto token, enter position details, compare entry price against market price, review risk levels, and export a backtest-ready strategy specification.
+PositionSight AI is a hackathon MVP for **BNB Hack: AI Trading Agent Edition - CoinMarketCap x Trust Wallet** on DoraHacks.
 
-## Hackathon Alignment
+## Track Alignment
 
-PositionSight AI fits the Crypto Intelligence / Strategy Skill direction by combining:
+PositionSight AI is submitted under the **Crypto Intelligence / Strategy Skills** track.
 
-- CoinMarketCap-style market data inputs.
-- Visual position analysis around entry price, current price, stop loss, and take profit.
-- Explainable strategy generation for risk-aware decisions.
-- Structured JSON output that can be consumed by backtesting tools.
+It ships a structured strategy skill and export artifact, not a live on-chain trading agent. The app analyzes market context, position risk, and strategy fit, then produces a human-readable and machine-readable strategy specification that can be reviewed or used by backtesting tools.
 
-The MVP uses server-only CoinMarketCap latest quotes when a local API key is configured, and safely falls back to mock market data when live quotes are unavailable.
+Because this project does not execute trades and does not deploy or control an on-chain trading agent, the agent address can be submitted as `N/A` for this project type.
 
-## Current MVP Features
+## What It Does
 
-- Local eligible token selector.
-- Position form for token, entry price, position size, timeframe, and max risk percentage.
-- Server-side market endpoint with CoinMarketCap latest quote support and mock fallback.
-- Entry price vs current price chart.
-- Suggested stop loss and take profit levels.
-- Deterministic strategy engine with:
-  - Trend-following pullback.
-  - Breakout with volume.
-  - Defensive mean reversion.
-  - No-trade signal when risk is too high.
-- Backtest-ready JSON preview and export.
-- Server API routes for CoinMarketCap quotes and strategy output.
+- Analyzes a selected eligible crypto asset.
+- Fetches live latest quote data from CoinMarketCap through a server-side API route.
+- Falls back to local mock market context safely when CoinMarketCap is unavailable.
+- Visualizes current price vs entry price.
+- Shows risk, stop loss, take profit, and invalidation levels.
+- Provides Beginner and Advanced eligible token modes.
+- Lets users choose Auto Recommended or a manual strategy mode.
+- Generates an explainable strategy decision and risk signal.
+- Displays market context, strategy fit, warnings, and next confirmation.
+- Exports a machine-readable backtest-ready JSON artifact.
+
+## What It Does Not Do
+
+- Does not execute trades.
+- Does not connect to wallets.
+- Does not use Binance trading execution.
+- Does not provide financial advice.
+- Does not expose API keys client-side.
+- Does not require an on-chain agent address.
 
 ## Tech Stack
 
 - Next.js
 - TypeScript
+- CoinMarketCap API
+- Server-side API routes
 - Tailwind CSS
 - Recharts
-- API routes for market data and strategy output
+- Local mock market context fallback
 
-## Getting Started
+## Setup
+
+Install dependencies:
+
+```bash
+npm install
+```
 
 Create a local environment file:
 
@@ -53,12 +65,6 @@ CMC_API_KEY=your_coinmarketcap_api_key_here
 CMC_API_BASE_URL=https://pro-api.coinmarketcap.com
 ```
 
-Install dependencies:
-
-```bash
-npm install
-```
-
 Run the development server:
 
 ```bash
@@ -67,16 +73,98 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Environment Variables
+## Environment
 
-`.env.local` is used for secrets and must not be committed.
+`.env.local` is used for local secrets and must never be committed.
+
+Required placeholder values:
 
 ```bash
 CMC_API_KEY=your_coinmarketcap_api_key_here
 CMC_API_BASE_URL=https://pro-api.coinmarketcap.com
 ```
 
-The app calls CoinMarketCap only from server routes and never exposes `CMC_API_KEY` to browser code. If `CMC_API_KEY` is missing or CoinMarketCap is unavailable, the app uses mock data fallback for demo reliability.
+CoinMarketCap requests are made server-side only. `CMC_API_KEY` is read by Next.js API routes and is never exposed to browser/client components.
+
+## API Route
+
+Market context is available through:
+
+```text
+GET /api/market?symbol=ADA
+GET /api/market?symbol=ADA&debug=1
+```
+
+Behavior:
+
+- With a valid `CMC_API_KEY`, `source` should be `coinmarketcap`.
+- Without a key, or if CoinMarketCap fails, `source` falls back to `mock`.
+- `debug=1` includes safe diagnostics such as request mode, CMC ID, HTTP status, and parser status.
+- Diagnostics never include the API key.
+
+## Export Artifact
+
+The JSON export is designed as a backtest-ready strategy artifact.
+
+It includes:
+
+- `schemaVersion`
+- `skill` metadata
+- `inputSchema`
+- `dataProvenance`
+- `dataRequirements`
+- `strategySpec`
+- `strategyDecision`
+- `marketContext`
+- `backtestSpec`
+- `executionAssumptions`
+- `evaluationMetrics`
+- `validation`
+
+The export preserves both human-readable strategy explanations and machine-readable backtest rules.
+
+## Current MVP Features
+
+- Next.js + TypeScript MVP.
+- CoinMarketCap latest quote integration through a server-side API route.
+- `CMC_API_KEY` stored in `.env.local`.
+- `.env.local` ignored by Git.
+- Mock fallback when CoinMarketCap live quote is unavailable.
+- Beginner / Advanced eligible token mode.
+- Strategy mode selector.
+- Risk visualization.
+- Strategy signal panel.
+- Market context panel.
+- Backtest-ready JSON export.
+- Data provenance.
+- Execution assumptions.
+- Evaluation metrics.
+- Validation metadata.
+- Human-readable and machine-readable strategy output.
+
+## Security
+
+- Never commit `.env.local`.
+- Never expose `CMC_API_KEY` in browser or client code.
+- CoinMarketCap API requests happen server-side only.
+- The app does not place trades or request wallet permissions.
+
+## Current Limitations
+
+- CoinMarketCap latest quote data is live when `CMC_API_KEY` is configured.
+- Technicals, sentiment, order book, and derivatives are currently mock/proxy fields.
+- Historical OHLCV and real indicator calculations are planned next.
+- There is no live trade execution.
+- Strategy output is educational and not financial advice.
+
+## Roadmap
+
+- Strategy horizon selection: 1 day, 3 days, 7 days.
+- Historical OHLCV integration.
+- Real EMA / RSI / ATR calculations.
+- Basic backtest runner.
+- Demo video.
+- DoraHacks final submission polish.
 
 ## Project Structure
 
@@ -84,7 +172,7 @@ The app calls CoinMarketCap only from server routes and never exposes `CMC_API_K
 src/app/                  Next.js App Router pages and API routes
 src/components/           UI components for the form, chart, metrics, and strategy output
 src/data/                 Eligible token list and mock market data
-src/lib/                  Formatting helpers and strategy engine
+src/lib/                  CoinMarketCap client, formatting helpers, export builder, strategy engine
 src/types/                Shared TypeScript types
 docs/                     Strategy spec and demo script
 ```
