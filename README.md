@@ -1,5 +1,9 @@
 # PositionSight AI
 
+<p align="center">
+  <img src="./position-sight.png" alt="PositionSight AI logo" width="180" />
+</p>
+
 A CoinMarketCap-powered crypto strategy skill that converts market context and user position data into an explainable, risk-aware, backtest-ready trading strategy specification.
 
 PositionSight AI is a hackathon MVP for **BNB Hack: AI Trading Agent Edition - CoinMarketCap x Trust Wallet** on DoraHacks.
