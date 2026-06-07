@@ -11,53 +11,154 @@ import {
   YAxis,
 } from "recharts";
 import { formatCurrency } from "@/lib/format";
-import type { MarketQuote, PositionInput, StrategySpec } from "@/types/strategy";
+import { translations, type Language } from "@/lib/i18n";
+import type { MarketQuote, PositionInput, StrategySpec, StrategyTimeframe } from "@/types/strategy";
 
 type PricePositionChartProps = {
   position: PositionInput;
   quote: MarketQuote;
   strategy: StrategySpec;
+  language: Language;
 };
 
-export function PricePositionChart({ position, quote, strategy }: PricePositionChartProps) {
+type ChartPointType = "historical_estimate" | "live_quote" | "strategy_projection";
+
+type ProjectionPoint = {
+  timeLabel: string;
+  price: number;
+  pointType: ChartPointType;
+  markerRole?: "entry" | "current" | "take_profit";
+};
+
+type ChartLabels = {
+  stop: string;
+  invalidation: string;
+  entry: string;
+  current: string;
+  takeProfit: string;
+  price: string;
+  estimatedProjection: string;
+  pointType: string;
+  pointTypes: Record<ChartPointType, string>;
+  timeLabels: Record<StrategyTimeframe, readonly string[]>;
+};
+
+function getProjectionData(
+  position: PositionInput,
+  quote: MarketQuote,
+  strategy: StrategySpec,
+  labels: ChartLabels,
+) {
+  const baseRange = Math.max(
+    Math.abs(strategy.takeProfit - position.entryPrice),
+    Math.abs(position.entryPrice - strategy.stopLoss),
+    quote.price * 0.015,
+  );
+
+  const midpoint = (position.entryPrice + quote.price) / 2;
+  const makePoint = (
+    timeframe: StrategyTimeframe,
+    index: number,
+    price: number,
+    pointType: ChartPointType,
+    markerRole?: ProjectionPoint["markerRole"],
+  ): ProjectionPoint => ({
+    timeLabel: labels.timeLabels[timeframe][index],
+    price,
+    pointType,
+    markerRole,
+  });
+
+  const projectionByTimeframe = {
+    "15m": [
+      makePoint("15m", 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint("15m", 1, position.entryPrice - baseRange * 0.45, "historical_estimate"),
+      makePoint("15m", 2, quote.price, "live_quote", "current"),
+      makePoint("15m", 3, quote.price + baseRange * 0.36, "strategy_projection"),
+      makePoint("15m", 4, quote.price - baseRange * 0.22, "strategy_projection"),
+    ],
+    "30m": [
+      makePoint("30m", 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint("30m", 1, midpoint - baseRange * 0.28, "historical_estimate"),
+      makePoint("30m", 2, quote.price, "live_quote", "current"),
+      makePoint("30m", 3, quote.price + baseRange * 0.25, "strategy_projection"),
+      makePoint("30m", 4, strategy.takeProfit, "strategy_projection", "take_profit"),
+    ],
+    "1h": [
+      makePoint("1h", 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint("1h", 1, midpoint - baseRange * 0.16, "historical_estimate"),
+      makePoint("1h", 2, quote.price, "live_quote", "current"),
+      makePoint("1h", 3, quote.price + baseRange * 0.18, "strategy_projection"),
+      makePoint("1h", 4, strategy.takeProfit, "strategy_projection", "take_profit"),
+    ],
+    "1d": [
+      makePoint("1d", 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint("1d", 1, midpoint, "historical_estimate"),
+      makePoint("1d", 2, quote.price, "live_quote", "current"),
+      makePoint("1d", 3, quote.price + baseRange * 0.12, "strategy_projection"),
+      makePoint("1d", 4, strategy.takeProfit, "strategy_projection", "take_profit"),
+    ],
+    "1w": [
+      makePoint("1w", 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint("1w", 1, midpoint, "historical_estimate"),
+      makePoint("1w", 2, quote.price, "live_quote", "current"),
+      makePoint("1w", 3, quote.price + baseRange * 0.18, "strategy_projection"),
+      makePoint("1w", 4, strategy.takeProfit, "strategy_projection", "take_profit"),
+    ],
+    "1mo": [
+      makePoint("1mo", 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint("1mo", 1, midpoint, "historical_estimate"),
+      makePoint("1mo", 2, quote.price, "live_quote", "current"),
+      makePoint("1mo", 3, quote.price + baseRange * 0.24, "strategy_projection"),
+      makePoint("1mo", 4, strategy.takeProfit, "strategy_projection", "take_profit"),
+    ],
+  } satisfies Record<PositionInput["strategyTimeframe"], ProjectionPoint[]>;
+
+  return projectionByTimeframe[position.strategyTimeframe];
+}
+
+export function PricePositionChart({ position, quote, strategy, language }: PricePositionChartProps) {
+  const t = translations[language];
+  const chartLabels = t.chartLabels;
   const pricePrecision = quote.price < 1 ? 6 : 2;
-  const data = [
-    { label: "Stop", price: strategy.stopLoss },
-    { label: "Invalidation", price: strategy.invalidationLevel },
-    { label: "Entry", price: position.entryPrice },
-    { label: "Current", price: quote.price },
-    { label: "Take Profit", price: strategy.takeProfit },
+  const data = getProjectionData(position, quote, strategy, chartLabels);
+  const priceValues = [
+    ...data.map((item) => item.price),
+    strategy.stopLoss,
+    strategy.invalidationLevel,
+    position.entryPrice,
+    quote.price,
+    strategy.takeProfit,
   ];
-  const priceValues = data.map((item) => item.price);
   const minPrice = Math.min(...priceValues);
   const maxPrice = Math.max(...priceValues);
   const pricePadding = Math.max((maxPrice - minPrice) * 0.18, quote.price * 0.01);
   const profitable = quote.price >= position.entryPrice;
   const levels = [
-    { label: "Stop loss", value: strategy.stopLoss, className: "border-red-200 bg-red-50 text-red-700" },
+    { label: chartLabels.stop, value: strategy.stopLoss, className: "border-red-200 bg-red-50 text-red-700" },
     {
-      label: "Invalidation",
+      label: chartLabels.invalidation,
       value: strategy.invalidationLevel,
       className: "border-amber-200 bg-amber-50 text-amber-800",
     },
-    { label: "Entry", value: position.entryPrice, className: "border-blue-200 bg-blue-50 text-blue-700" },
+    { label: chartLabels.entry, value: position.entryPrice, className: "border-blue-200 bg-blue-50 text-blue-700" },
     {
-      label: "Current",
+      label: chartLabels.current,
       value: quote.price,
       className: profitable
         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
         : "border-red-200 bg-red-50 text-red-700",
     },
-    { label: "Take profit", value: strategy.takeProfit, className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+    { label: chartLabels.takeProfit, value: strategy.takeProfit, className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
   ];
 
   return (
     <div className="w-full min-w-0">
-      <div className="h-[310px] w-full">
+      <div className="h-[340px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 16, right: 16, bottom: 12, left: 6 }}>
+          <LineChart data={data} margin={{ top: 16, right: 18, bottom: 18, left: 6 }}>
             <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
-            <XAxis dataKey="label" tick={{ fill: "#475569", fontSize: 12 }} tickLine={false} interval={0} />
+            <XAxis dataKey="timeLabel" tick={{ fill: "#475569", fontSize: 12 }} tickLine={false} interval={0} />
             <YAxis
               domain={[minPrice - pricePadding, maxPrice + pricePadding]}
               tick={{ fill: "#475569", fontSize: 12 }}
@@ -65,7 +166,15 @@ export function PricePositionChart({ position, quote, strategy }: PricePositionC
               width={76}
             />
             <Tooltip
-              formatter={(value) => [formatCurrency(Number(value), pricePrecision), "Price"]}
+              formatter={(value, _name, item) => {
+                const pointType = (item.payload as ProjectionPoint).pointType;
+
+                return [
+                  formatCurrency(Number(value), pricePrecision),
+                  `${chartLabels.price} · ${chartLabels.pointTypes[pointType]}`,
+                ];
+              }}
+              labelFormatter={(label) => `${label} · ${chartLabels.estimatedProjection}`}
               contentStyle={{
                 borderRadius: 8,
                 border: "1px solid #cbd5e1",
@@ -96,6 +205,9 @@ export function PricePositionChart({ position, quote, strategy }: PricePositionC
           </div>
         ))}
       </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        {quote.source === "coinmarketcap" ? t.chartDataNotes.live : t.chartDataNotes.mock}
+      </p>
     </div>
   );
 }

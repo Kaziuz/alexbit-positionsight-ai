@@ -1,4 +1,6 @@
-export type Timeframe = "15m" | "1h" | "4h" | "1d";
+export type StrategyTimeframe = "15m" | "30m" | "1h" | "1d" | "1w" | "1mo";
+export type TimeframeCategory = "intraday" | "daily" | "weekly" | "monthly";
+export type AggregationHint = "weekly" | "monthly";
 
 export type StrategyType =
   | "trend_following_pullback"
@@ -14,6 +16,7 @@ export type StrategyMode =
   | "risk_check";
 
 export type StrategyFit = "good" | "caution" | "poor";
+export type RiskVerdict = "good" | "needs_confirmation" | "poor_fit" | "no_trade_recommended";
 
 export type TokenCategory =
   | "Main Assets"
@@ -101,14 +104,18 @@ export type PositionInput = {
   symbol: string;
   entryPrice: number;
   positionSize: number;
-  timeframe: Timeframe;
+  strategyTimeframe: StrategyTimeframe;
+  timeframeCategory: TimeframeCategory;
+  analysisInterval: StrategyTimeframe;
   maxRiskPercentage: number;
   strategyMode?: StrategyMode;
 };
 
 export type StrategySpec = {
   asset: string;
-  timeframe: Timeframe;
+  strategyTimeframe: StrategyTimeframe;
+  timeframeCategory: TimeframeCategory;
+  analysisInterval: StrategyTimeframe;
   strategyType: StrategyType;
   entryCondition: string;
   exitCondition: string;
@@ -135,6 +142,11 @@ export type StrategySpec = {
 export type StrategyDecision = {
   spec: StrategySpec;
   selectedMode: StrategyMode;
+  selectedStrategyMode: StrategyMode;
+  evaluatedStrategyType: StrategyType;
+  finalRiskVerdict: RiskVerdict;
+  noTradeRecommended: boolean;
+  noTradeReason?: string;
   selectedBy: "auto" | "user";
   fit: StrategyFit;
   whyThisStrategy: string;
@@ -147,6 +159,11 @@ export type BacktestSignal = "LONG" | "REDUCE" | "EXIT" | "ABSTAIN" | "CONDITION
 
 export type BacktestSpec = {
   strategyType: StrategyType;
+  strategyTimeframe: StrategyTimeframe;
+  timeframeCategory: TimeframeCategory;
+  analysisInterval: StrategyTimeframe;
+  aggregationHint?: AggregationHint;
+  warning?: string;
   signal: BacktestSignal;
   shouldOpenPosition: boolean;
   entryRule: Record<string, unknown>;
@@ -175,12 +192,21 @@ export type StrategyExport = {
     intendedLiveSource: "CoinMarketCap";
     generatedAt: string;
   };
+  chartSeriesType: "estimated_projection";
+  advancedContextType: "estimated_until_ohlcv";
   dataRequirements: {
     requiredSeries: ["open", "high", "low", "close", "volume"];
-    interval: Timeframe;
+    interval: StrategyTimeframe;
+    aggregationHint?: AggregationHint;
+    minimumHistoryDays: 200;
     lookbackPeriods: 200;
     requiredIndicators: ["ema20", "ema50", "ema200", "rsi14", "atr14", "support", "resistance"];
   };
+  selectedStrategyMode: StrategyMode;
+  evaluatedStrategyType: StrategyType;
+  finalRiskVerdict: RiskVerdict;
+  noTradeRecommended: boolean;
+  noTradeReason?: string;
   backtestSpec: BacktestSpec;
   executionAssumptions: {
     initialCapital: 10000;

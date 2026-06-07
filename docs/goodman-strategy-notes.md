@@ -5,10 +5,10 @@ These are original project research notes used to shape the PositionSight AI MVP
 ## Core Principles
 
 - Avoid day trading and overtrading. The product should discourage constant short-term signal chasing.
-- Prefer `1h`, `4h`, and `1d` context. Ultra-short timeframes should be treated as speculative by default.
+- Prefer higher-timeframe context when possible. Intraday research can be supported, but it should require stronger confirmation and tighter risk control.
 - Wait for trend confirmation. The system should avoid guessing bottoms and prefer evidence that an upward trend has started or resumed.
 - Use breakout and retest logic. A strong move is more useful after price confirms strength and gives a clear failure level.
-- Respect period closes. Timeframe closes matter more than temporary intraperiod noise.
+- Respect period closes. Higher-timeframe closes usually matter more than temporary intraperiod noise.
 - Use moving averages as filters or trailing exits. The MVP does not calculate averages yet, but strategy language can reference them as future backtest rules.
 - Cut losing trades quickly. Stop loss and invalidation levels should be explicit and testable.
 - Size positions by risk. Trade size should be evaluated through risk per setup, not through available capital alone.
@@ -16,7 +16,8 @@ These are original project research notes used to shape the PositionSight AI MVP
 
 ## PositionSight AI Mapping
 
-- The `15m` timeframe should usually produce `no_trade` unless trend, volume, and risk are unusually clear.
+- Strategy Timeframe should support research across 15m, 30m, 1h, 1d, 1w, and 1mo while making intraday risk clear.
+- Higher timeframes should be presented as better suited to patient, risk-first position decisions.
 - Strategy copy should guide users toward waiting for confirmation instead of reacting to every price tick.
 - Breakout setups should include retest or failed-retest language so the trade has a clear invalidation point.
 - Exit rules should emphasize quick loss cutting plus trailing logic for winners.
@@ -29,4 +30,4 @@ These are original project research notes used to shape the PositionSight AI MVP
 - `trend_following_pullback`: trend-confirmation setup after price holds or retests a constructive area.
 - `breakout_with_volume`: breakout and retest setup when strength is confirmed by volume and price remains above entry.
 - `defensive_mean_reversion`: conservative recovery setup only when risk is controlled and invalidation is clear.
-- `no_trade`: capital-preservation outcome for excessive risk, speculative short timeframes, unclear structure, or unrealistic distance from entry.
+- `no_trade`: capital-preservation outcome for excessive risk, unclear structure, weak context, or unrealistic distance from entry.

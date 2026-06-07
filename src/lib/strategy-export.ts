@@ -1,13 +1,42 @@
 import type { BacktestSpec, MarketContext, PositionInput, StrategyDecision, StrategyExport } from "@/types/strategy";
+import {
+  getAggregationHint,
+  getTimeframeCategory,
+  getTimeframeProfile,
+  getTimeframeWarning,
+} from "./strategy-timeframe";
 
 function getInputSchema(): StrategyExport["inputSchema"] {
   return {
-    required: ["symbol", "entryPrice", "positionSize", "timeframe", "maxRiskPercentage", "strategyMode"],
+    required: [
+      "symbol",
+      "entryPrice",
+      "positionSize",
+      "strategyTimeframe",
+      "timeframeCategory",
+      "analysisInterval",
+      "maxRiskPercentage",
+      "strategyMode",
+    ],
     properties: {
       symbol: { type: "string", description: "Eligible token symbol to analyze." },
       entryPrice: { type: "number", exclusiveMinimum: 0, description: "User entry price or planned entry price." },
       positionSize: { type: "number", exclusiveMinimum: 0, description: "Token quantity held or planned." },
-      timeframe: { type: "string", enum: ["15m", "1h", "4h", "1d"], description: "Strategy evaluation interval." },
+      strategyTimeframe: {
+        type: "string",
+        enum: ["15m", "30m", "1h", "1d", "1w", "1mo"],
+        description: "Selected strategy timeframe.",
+      },
+      timeframeCategory: {
+        type: "string",
+        enum: ["intraday", "daily", "weekly", "monthly"],
+        description: "Risk category derived from the selected timeframe.",
+      },
+      analysisInterval: {
+        type: "string",
+        enum: ["15m", "30m", "1h", "1d", "1w", "1mo"],
+        description: "Backtest analysis interval. Weekly and monthly selections include an aggregation hint.",
+      },
       maxRiskPercentage: {
         type: "number",
         minimum: 1,
@@ -25,6 +54,7 @@ function getInputSchema(): StrategyExport["inputSchema"] {
 
 function getCommonRules(position: PositionInput, decision: StrategyDecision, context: MarketContext) {
   const spec = decision.spec;
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
 
   return {
     stopRule: {
@@ -53,11 +83,23 @@ function getCommonRules(position: PositionInput, decision: StrategyDecision, con
     },
     riskManagement: {
       maxRiskPercentage: position.maxRiskPercentage,
-      riskControlled: position.maxRiskPercentage <= 4,
+      riskControlled: position.maxRiskPercentage <= timeframe.maxRiskForRiskControlled,
+      timeframeCategory: getTimeframeCategory(position.strategyTimeframe),
       liquidityScore: context.orderBook.liquidityScore,
       sentimentLabel: context.sentiment.label,
       noLiveExecution: true,
     },
+  };
+}
+
+function getBacktestBase(position: PositionInput, strategyType: BacktestSpec["strategyType"]) {
+  return {
+    strategyType,
+    strategyTimeframe: position.strategyTimeframe,
+    timeframeCategory: getTimeframeCategory(position.strategyTimeframe),
+    analysisInterval: position.analysisInterval,
+    aggregationHint: getAggregationHint(position.strategyTimeframe),
+    warning: getTimeframeWarning(position.strategyTimeframe),
   };
 }
 
@@ -68,16 +110,21 @@ export function createBacktestSpec(
 ): BacktestSpec {
   const spec = decision.spec;
   const common = getCommonRules(position, decision, context);
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
   const fitAllowsOpen = decision.fit === "good" || decision.fit === "caution";
 
-  if (spec.strategyType === "no_trade") {
+  if (decision.noTradeRecommended || spec.strategyType === "no_trade") {
     return {
-      strategyType: spec.strategyType,
+      ...getBacktestBase(position, spec.strategyType),
       signal: "ABSTAIN",
       shouldOpenPosition: false,
       entryRule: {
         type: "none",
-        reason: spec.riskRules.noTradeReason ?? "No-trade selected because risk or market structure is unclear.",
+        evaluatedStrategyType: decision.evaluatedStrategyType,
+        reason:
+          decision.noTradeReason ??
+          spec.riskRules.noTradeReason ??
+          "No-trade selected because risk or market structure is unclear.",
       },
       exitRule: { type: "none" },
       ...common,
@@ -86,18 +133,18 @@ export function createBacktestSpec(
 
   if (spec.strategyType === "breakout_with_volume") {
     return {
-      strategyType: spec.strategyType,
+      ...getBacktestBase(position, spec.strategyType),
       signal: "LONG",
       shouldOpenPosition: fitAllowsOpen,
       entryRule: {
         type: "breakout_retest",
         closePosition: context.technicals.closePosition,
         allowedClosePositions: ["breakout", "near_resistance"],
-        minimumPercentChange24h: 2.5,
+        minimumPercentChange24h: timeframe.breakoutPercentChange,
         actualPercentChange24h: context.quote.percentChange24h,
-        minimumVolume24h: 150_000_000,
+        minimumVolume24h: timeframe.breakoutVolume,
         actualVolume24h: context.quote.volume24h,
-        minimumLiquidityScore: 68,
+        minimumLiquidityScore: timeframe.strongLiquidityScore,
         actualLiquidityScore: context.orderBook.liquidityScore,
         sentimentMustNotBe: "bearish",
         actualSentiment: context.sentiment.label,
@@ -112,10 +159,10 @@ export function createBacktestSpec(
   }
 
   if (spec.strategyType === "defensive_mean_reversion") {
-    const riskControlled = position.maxRiskPercentage <= 4;
+    const riskControlled = position.maxRiskPercentage <= timeframe.maxRiskForRiskControlled;
 
     return {
-      strategyType: spec.strategyType,
+      ...getBacktestBase(position, spec.strategyType),
       signal: riskControlled ? "CONDITIONAL_LONG" : "ABSTAIN",
       shouldOpenPosition: riskControlled && fitAllowsOpen,
       entryRule: {
@@ -132,14 +179,14 @@ export function createBacktestSpec(
       exitRule: {
         type: "quick_loss_cut_or_recovery",
         reduceIf: "close_below_stop_loss_or_support",
-        holdOnlyIf: "higher_timeframe_close_confirms_support",
+        holdOnlyIf: "selected_timeframe_close_confirms_support",
       },
       ...common,
     };
   }
 
   return {
-    strategyType: spec.strategyType,
+    ...getBacktestBase(position, spec.strategyType),
     signal: "LONG",
     shouldOpenPosition: fitAllowsOpen,
     entryRule: {
@@ -175,8 +222,18 @@ export function createStrategyExport(
 ): StrategyExport {
   const limitations =
     context.source === "mock"
-      ? ["mock data", "not financial advice", "no live execution"]
-      : ["not financial advice", "no live execution", "technical and sentiment fields are proxy context"];
+      ? [
+          "mock data fallback",
+          "Historical OHLCV is not integrated yet",
+          "not financial advice",
+          "no live execution",
+        ]
+      : [
+          "Historical OHLCV is not integrated yet",
+          "advanced context fields are estimated until historical OHLCV is added",
+          "not financial advice",
+          "no live execution",
+        ];
 
   return {
     schemaVersion: "1.0.0",
@@ -192,12 +249,21 @@ export function createStrategyExport(
       intendedLiveSource: "CoinMarketCap",
       generatedAt: new Date().toISOString(),
     },
+    chartSeriesType: "estimated_projection",
+    advancedContextType: "estimated_until_ohlcv",
     dataRequirements: {
       requiredSeries: ["open", "high", "low", "close", "volume"],
-      interval: position.timeframe,
+      interval: position.analysisInterval,
+      aggregationHint: getAggregationHint(position.strategyTimeframe),
+      minimumHistoryDays: 200,
       lookbackPeriods: 200,
       requiredIndicators: ["ema20", "ema50", "ema200", "rsi14", "atr14", "support", "resistance"],
     },
+    selectedStrategyMode: decision.selectedStrategyMode,
+    evaluatedStrategyType: decision.evaluatedStrategyType,
+    finalRiskVerdict: decision.finalRiskVerdict,
+    noTradeRecommended: decision.noTradeRecommended,
+    noTradeReason: decision.noTradeReason,
     backtestSpec: createBacktestSpec(position, decision, context),
     executionAssumptions: {
       initialCapital: 10000,
@@ -222,6 +288,11 @@ export function createStrategyExport(
     strategySpec: decision.spec,
     strategyDecision: {
       selectedMode: decision.selectedMode,
+      selectedStrategyMode: decision.selectedStrategyMode,
+      evaluatedStrategyType: decision.evaluatedStrategyType,
+      finalRiskVerdict: decision.finalRiskVerdict,
+      noTradeRecommended: decision.noTradeRecommended,
+      noTradeReason: decision.noTradeReason,
       selectedBy: decision.selectedBy,
       fit: decision.fit,
       whyThisStrategy: decision.whyThisStrategy,

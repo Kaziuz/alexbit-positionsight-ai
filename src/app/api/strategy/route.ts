@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { getMockMarketContext } from "@/data/mock-market";
 import { parseLocalizedNumberInput } from "@/lib/number-input";
 import { generateStrategyDecision } from "@/lib/strategy-engine";
-import type { PositionInput, StrategyMode, Timeframe } from "@/types/strategy";
+import { getTimeframeCategory, strategyTimeframes } from "@/lib/strategy-timeframe";
+import type { PositionInput, StrategyMode, StrategyTimeframe } from "@/types/strategy";
 
 type PositionRequestBody = {
   symbol?: unknown;
   entryPrice?: unknown;
   positionSize?: unknown;
-  timeframe?: unknown;
+  strategyTimeframe?: unknown;
+  analysisInterval?: unknown;
   maxRiskPercentage?: unknown;
   strategyMode?: unknown;
 };
@@ -32,7 +34,11 @@ export async function POST(request: Request) {
   const entryPrice = parseRequestNumber(body.entryPrice);
   const positionSize = parseRequestNumber(body.positionSize);
   const maxRiskPercentage = parseRequestNumber(body.maxRiskPercentage);
-  const timeframe = typeof body.timeframe === "string" ? (body.timeframe as Timeframe) : undefined;
+  const strategyTimeframe =
+    typeof body.strategyTimeframe === "string" &&
+    strategyTimeframes.includes(body.strategyTimeframe as StrategyTimeframe)
+      ? (body.strategyTimeframe as StrategyTimeframe)
+      : undefined;
   const strategyMode = typeof body.strategyMode === "string" ? (body.strategyMode as StrategyMode) : "auto";
   const context = getMockMarketContext(symbol);
 
@@ -47,7 +53,7 @@ export async function POST(request: Request) {
     positionSize.value <= 0 ||
     !maxRiskPercentage.ok ||
     maxRiskPercentage.value <= 0 ||
-    !timeframe
+    !strategyTimeframe
   ) {
     return NextResponse.json({ error: "Position details are incomplete." }, { status: 400 });
   }
@@ -56,7 +62,9 @@ export async function POST(request: Request) {
     symbol,
     entryPrice: entryPrice.value,
     positionSize: positionSize.value,
-    timeframe,
+    strategyTimeframe,
+    timeframeCategory: getTimeframeCategory(strategyTimeframe),
+    analysisInterval: strategyTimeframe,
     maxRiskPercentage: maxRiskPercentage.value,
     strategyMode,
   };

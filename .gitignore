@@ -16,6 +16,10 @@ build/
 # type/build caches
 *.tsbuildinfo
 
+# playwright
+test-results/
+playwright-report/
+
 # logs
 npm-debug.log*
 yarn-debug.log*

@@ -138,7 +138,7 @@ function createNeutralProxyContext(symbol: string, quote: MarketContext["quote"]
     symbol,
     source: "coinmarketcap",
     warnings: [
-      "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are proxy fields until future integrations.",
+      "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
     ],
     quote,
     technicals: {
@@ -155,8 +155,8 @@ function createNeutralProxyContext(symbol: string, quote: MarketContext["quote"]
     sentiment: {
       score: 0,
       label: "neutral",
-      newsBias: "Unavailable from latest quote endpoint; treated as neutral proxy.",
-      communityBias: "Unavailable from latest quote endpoint; treated as neutral proxy.",
+      newsBias: "Unavailable from latest quote endpoint; treated as a neutral estimate.",
+      communityBias: "Unavailable from latest quote endpoint; treated as a neutral estimate.",
     },
     orderBook: {
       bidAskSpreadPercent: 0,
@@ -204,7 +204,7 @@ function normalizeCmcAsset(symbol: string, asset: CmcAssetQuote): MarketContext 
     symbol: mockContext.symbol,
     source: "coinmarketcap",
     warnings: [
-      "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are mock/proxy fields.",
+      "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
     ],
     quote,
   };

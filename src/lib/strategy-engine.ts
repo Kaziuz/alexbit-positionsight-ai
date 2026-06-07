@@ -7,7 +7,9 @@ import type {
   StrategyMode,
   StrategySpec,
   StrategyType,
+  RiskVerdict,
 } from "@/types/strategy";
+import { getTimeframeCategory, getTimeframeProfile } from "./strategy-timeframe";
 
 function roundPrice(value: number) {
   if (value < 0.01) {
@@ -53,9 +55,10 @@ function getModeStrategyType(mode: StrategyMode): StrategyType | undefined {
 }
 
 function getMarketSignals(position: PositionInput, quote: MarketQuote, context?: MarketContext) {
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
   const pnlPercentage = ((quote.price - position.entryPrice) / position.entryPrice) * 100;
   const absoluteMoveFromEntry = Math.abs(pnlPercentage);
-  const riskControlled = position.maxRiskPercentage <= 4;
+  const riskControlled = position.maxRiskPercentage <= timeframe.maxRiskForRiskControlled;
   const priceAboveSupport = context ? quote.price >= context.technicals.support : quote.price >= position.entryPrice;
   const emaBullish =
     context &&
@@ -68,9 +71,13 @@ function getMarketSignals(position: PositionInput, quote: MarketQuote, context?:
     : pnlPercentage < position.maxRiskPercentage;
   const breakoutLike =
     context?.technicals.closePosition === "breakout" || context?.technicals.closePosition === "near_resistance";
-  const liquidityAcceptable = context ? context.orderBook.liquidityScore >= 55 : true;
-  const liquidityStrong = context ? context.orderBook.liquidityScore >= 68 : quote.volume24h > 500_000_000;
-  const buyPressurePositive = context ? context.orderBook.buyPressure >= context.orderBook.sellPressure + 8 : true;
+  const liquidityAcceptable = context ? context.orderBook.liquidityScore >= timeframe.minLiquidityScore : true;
+  const liquidityStrong = context
+    ? context.orderBook.liquidityScore >= timeframe.strongLiquidityScore
+    : quote.volume24h > timeframe.breakoutVolume;
+  const buyPressurePositive = context
+    ? context.orderBook.buyPressure >= context.orderBook.sellPressure + (timeframe.intradayStrict ? 12 : 8)
+    : true;
   const sentimentNotBearish = context ? context.sentiment.label !== "bearish" : true;
   const bearishWeakContext =
     context?.technicals.trendState === "bearish" &&
@@ -81,19 +88,17 @@ function getMarketSignals(position: PositionInput, quote: MarketQuote, context?:
     (context?.orderBook.liquidityScore ?? 70) < 65;
   const derivativesConflict =
     context &&
-    position.maxRiskPercentage > 4 &&
+    position.maxRiskPercentage > timeframe.maxRiskForRiskControlled &&
     (context.derivatives.fundingBias === "unavailable" ||
       context.derivatives.longShortBias === "unavailable" ||
       (context.derivatives.fundingBias === "positive" && context.derivatives.longShortBias === "short") ||
       (context.derivatives.fundingBias === "negative" && context.derivatives.longShortBias === "long"));
-  const clearUltraShortBreakout =
-    riskControlled &&
-    quote.price > position.entryPrice &&
-    quote.percentChange24h >= 3.5 &&
-    liquidityStrong &&
-    buyPressurePositive &&
-    absoluteMoveFromEntry <= position.maxRiskPercentage * 1.5;
-
+  const intradayWeakConfirmation =
+    timeframe.intradayStrict &&
+    (!liquidityStrong ||
+      !buyPressurePositive ||
+      !sentimentNotBearish ||
+      Math.abs(quote.percentChange24h) < timeframe.unclearMoveThreshold);
   return {
     pnlPercentage,
     absoluteMoveFromEntry,
@@ -111,7 +116,7 @@ function getMarketSignals(position: PositionInput, quote: MarketQuote, context?:
     bearishWeakContext,
     memeRisk,
     derivativesConflict,
-    clearUltraShortBreakout,
+    intradayWeakConfirmation,
   };
 }
 
@@ -119,24 +124,26 @@ function getAutoStrategyType(position: PositionInput, input: MarketQuote | Marke
   const quote = quoteFromInput(input);
   const context = isMarketContext(input) ? input : undefined;
   const signals = getMarketSignals(position, quote, context);
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
 
   if (
     position.maxRiskPercentage > 6 ||
-    signals.absoluteMoveFromEntry > position.maxRiskPercentage * 2 ||
-    (Math.abs(quote.percentChange24h) < 0.5 && signals.absoluteMoveFromEntry < position.maxRiskPercentage) ||
-    (position.timeframe === "15m" && !signals.clearUltraShortBreakout) ||
+    signals.absoluteMoveFromEntry > position.maxRiskPercentage * timeframe.entryDistanceMultiplier ||
+    (Math.abs(quote.percentChange24h) < timeframe.unclearMoveThreshold &&
+      signals.absoluteMoveFromEntry < position.maxRiskPercentage) ||
     signals.bearishWeakContext ||
     !signals.liquidityAcceptable ||
     signals.memeRisk ||
-    signals.derivativesConflict
+    signals.derivativesConflict ||
+    (signals.intradayWeakConfirmation && position.maxRiskPercentage > timeframe.maxRiskForRiskControlled)
   ) {
     return "no_trade";
   }
 
   if (
     quote.price > position.entryPrice &&
-    quote.percentChange24h > 2.5 &&
-    quote.volume24h > 150_000_000 &&
+    quote.percentChange24h > timeframe.breakoutPercentChange &&
+    quote.volume24h > timeframe.breakoutVolume &&
     signals.breakoutLike &&
     signals.liquidityStrong &&
     signals.buyPressurePositive &&
@@ -159,7 +166,9 @@ function getAutoStrategyType(position: PositionInput, input: MarketQuote | Marke
     signals.priceAboveSupport &&
     !signals.rsiOverbought &&
     (!context || context.technicals.trendState !== "bearish") &&
-    (!context || signals.emaBullish || context.technicals.trendState === "neutral")
+    (!context ||
+      signals.emaBullish ||
+      (context.technicals.trendState === "neutral" && !timeframe.trendRequiresBullishStructure))
   ) {
     return "trend_following_pullback";
   }
@@ -171,16 +180,13 @@ function getNoTradeReason(position: PositionInput, input: MarketQuote | MarketCo
   const quote = quoteFromInput(input);
   const context = isMarketContext(input) ? input : undefined;
   const signals = getMarketSignals(position, quote, context);
-
-  if (position.timeframe === "15m") {
-    return "The 15m timeframe is too speculative for this MVP unless momentum, volume, and risk are exceptionally clear.";
-  }
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
 
   if (position.maxRiskPercentage > 6) {
     return "Configured risk is too high for a capital-preservation strategy.";
   }
 
-  if (signals.absoluteMoveFromEntry > position.maxRiskPercentage * 2) {
+  if (signals.absoluteMoveFromEntry > position.maxRiskPercentage * timeframe.entryDistanceMultiplier) {
     return "Current price is too far from entry to create a realistic risk-managed setup.";
   }
 
@@ -200,22 +206,29 @@ function getNoTradeReason(position: PositionInput, input: MarketQuote | MarketCo
     return "Derivatives proxy is unavailable or conflicting while risk is elevated.";
   }
 
-  if (position.maxRiskPercentage > 4 && (signals.pnlPercentage < position.maxRiskPercentage * 0.5 || quote.percentChange24h < -1.5)) {
+  if (signals.intradayWeakConfirmation && position.maxRiskPercentage > timeframe.maxRiskForRiskControlled) {
+    return "Intraday context needs stronger liquidity, momentum, and risk control before a setup is usable.";
+  }
+
+  if (
+    position.maxRiskPercentage > timeframe.maxRiskForRiskControlled &&
+    (signals.pnlPercentage < position.maxRiskPercentage * 0.5 || quote.percentChange24h < -1.5)
+  ) {
     return "Risk is not controlled enough for a defensive setup while market pressure is elevated.";
   }
 
-  if (Math.abs(quote.percentChange24h) < 0.5 && signals.absoluteMoveFromEntry < position.maxRiskPercentage) {
-    return "Market structure is unclear, so waiting for a stronger timeframe close is preferred.";
+  if (Math.abs(quote.percentChange24h) < timeframe.unclearMoveThreshold && signals.absoluteMoveFromEntry < position.maxRiskPercentage) {
+    return "Market structure is unclear, so waiting for a stronger selected-timeframe close is preferred.";
   }
 
-  return "Risk or market structure is unclear for a fresh strategy signal.";
+  return "Risk or market structure is unclear for this strategy timeframe.";
 }
 
 function copyForStrategy(strategyType: StrategyType) {
   const copy = {
     trend_following_pullback: {
       entryCondition:
-        "Wait for a confirmed higher close or retest above the trend area before treating the pullback as a continuation setup.",
+        "Wait for a confirmed selected-timeframe close or retest above the trend area before treating the pullback as a continuation setup.",
       exitCondition:
         "Cut the trade at invalidation, take partial profit at target, and trail any runner while price holds above the trend filter.",
     },
@@ -229,10 +242,10 @@ function copyForStrategy(strategyType: StrategyType) {
       entryCondition:
         "Do not add exposure unless risk is controlled and price stabilizes near support with evidence of a rebound.",
       exitCondition:
-        "Reduce quickly if price loses the stop level, and only hold for recovery if a higher timeframe close confirms support.",
+        "Reduce quickly if price loses the stop level, and only hold for recovery if the selected timeframe confirms support.",
     },
     no_trade: {
-      entryCondition: "No new entry. Wait for clearer trend confirmation on a higher timeframe.",
+      entryCondition: "No new entry. Wait for clearer trend confirmation on the selected timeframe.",
       exitCondition: "Reconsider only after risk, entry distance, and market structure return inside controlled limits.",
     },
   } satisfies Record<StrategyType, { entryCondition: string; exitCondition: string }>;
@@ -240,7 +253,12 @@ function copyForStrategy(strategyType: StrategyType) {
   return copy[strategyType];
 }
 
-function buildStrategySpec(position: PositionInput, input: MarketQuote | MarketContext, strategyType: StrategyType): StrategySpec {
+function buildStrategySpec(
+  position: PositionInput,
+  input: MarketQuote | MarketContext,
+  strategyType: StrategyType,
+  noTradeReason?: string,
+): StrategySpec {
   const quote = quoteFromInput(input);
   const stopLossDistance = Math.max(position.maxRiskPercentage / 100, 0.01);
   const rewardDistance = stopLossDistance * 1.8;
@@ -252,7 +270,9 @@ function buildStrategySpec(position: PositionInput, input: MarketQuote | MarketC
 
   return {
     asset: position.symbol,
-    timeframe: position.timeframe,
+    strategyTimeframe: position.strategyTimeframe,
+    timeframeCategory: getTimeframeCategory(position.strategyTimeframe),
+    analysisInterval: position.analysisInterval,
     strategyType,
     entryCondition: copy.entryCondition,
     exitCondition: copy.exitCondition,
@@ -263,7 +283,7 @@ function buildStrategySpec(position: PositionInput, input: MarketQuote | MarketC
       maxRiskPercentage: position.maxRiskPercentage,
       positionSize: position.positionSize,
       estimatedRiskAmount,
-      noTradeReason: strategyType === "no_trade" ? getNoTradeReason(position, input) : undefined,
+      noTradeReason: noTradeReason ?? (strategyType === "no_trade" ? getNoTradeReason(position, input) : undefined),
     },
     dataUsed: {
       entryPrice: position.entryPrice,
@@ -277,6 +297,18 @@ function buildStrategySpec(position: PositionInput, input: MarketQuote | MarketC
   };
 }
 
+function getRiskVerdict(requestedType: StrategyType, autoType: StrategyType, fit: StrategyFit): RiskVerdict {
+  if (requestedType === "no_trade" || autoType === "no_trade" || fit === "poor") {
+    return "no_trade_recommended";
+  }
+
+  if (fit === "caution") {
+    return "needs_confirmation";
+  }
+
+  return "good";
+}
+
 function evaluateRequestedStrategy(
   position: PositionInput,
   input: MarketQuote | MarketContext,
@@ -286,17 +318,20 @@ function evaluateRequestedStrategy(
   const context = isMarketContext(input) ? input : undefined;
   const autoType = getAutoStrategyType(position, input);
   const signals = getMarketSignals(position, quote, context);
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
   const warnings: string[] = [];
   let fit: StrategyFit = requestedType === autoType ? "good" : "caution";
 
-  if (position.timeframe === "15m" && requestedType !== "no_trade" && !signals.clearUltraShortBreakout) {
-    warnings.push("15m setups are usually too speculative for this MVP.");
+  if (signals.absoluteMoveFromEntry > position.maxRiskPercentage * timeframe.entryDistanceMultiplier && requestedType !== "no_trade") {
+    warnings.push("Entry price is too far from current price for a clean risk setup.");
     fit = "poor";
   }
 
-  if (signals.absoluteMoveFromEntry > position.maxRiskPercentage * 2 && requestedType !== "no_trade") {
-    warnings.push("Entry price is too far from current price for a clean risk setup.");
-    fit = "poor";
+  if (timeframe.intradayStrict && requestedType !== "no_trade") {
+    warnings.push("Intraday timeframes are more speculative and need stronger confirmation.");
+    if (signals.intradayWeakConfirmation) {
+      fit = fit === "poor" ? "poor" : "caution";
+    }
   }
 
   if (!signals.liquidityAcceptable && requestedType !== "no_trade") {
@@ -309,7 +344,10 @@ function evaluateRequestedStrategy(
     fit = fit === "good" ? "caution" : fit;
   }
 
-  if (requestedType === "breakout_with_volume" && !(signals.breakoutLike && quote.percentChange24h > 2.5 && signals.buyPressurePositive)) {
+  if (
+    requestedType === "breakout_with_volume" &&
+    !(signals.breakoutLike && quote.percentChange24h > timeframe.breakoutPercentChange && signals.buyPressurePositive)
+  ) {
     warnings.push("Breakout + Retest needs stronger momentum, volume, and a clear retest or breakout area.");
     fit = fit === "poor" ? "poor" : "caution";
   }
@@ -343,13 +381,13 @@ function evaluateRequestedStrategy(
     warnings,
     why:
       fit === "good"
-        ? `The selected ${labels[requestedType]} mode matches the current mock market context.`
+        ? `The selected ${labels[requestedType]} mode matches the current market context.`
         : `Auto mode prefers ${labels[autoType]}, while the selected mode needs more confirmation.`,
     nextConfirmation:
       requestedType === "breakout_with_volume"
         ? "Wait for price to hold above the breakout area after a retest."
         : requestedType === "trend_following_pullback"
-          ? "Wait for a higher-timeframe close above support or the trend filter."
+          ? "Wait for the selected timeframe to close above support or the trend filter."
           : requestedType === "defensive_mean_reversion"
             ? "Wait for stabilization near support and avoid averaging down without confirmation."
             : "Wait for risk, liquidity, and market structure to improve before taking a new setup.",
@@ -373,12 +411,23 @@ export function generateStrategyDecision(
   const autoType = getAutoStrategyType(position, input);
   const requestedType = getModeStrategyType(selectedMode) ?? autoType;
   const evaluation = evaluateRequestedStrategy(position, input, requestedType);
-  const finalType = selectedBy === "user" && evaluation.fit === "poor" ? "no_trade" : requestedType;
-  const spec = buildStrategySpec(position, input, finalType);
+  const finalRiskVerdict = getRiskVerdict(requestedType, autoType, evaluation.fit);
+  const noTradeRecommended = finalRiskVerdict === "no_trade_recommended";
+  const noTradeReason = noTradeRecommended
+    ? autoType === "no_trade" || requestedType === "no_trade"
+      ? getNoTradeReason(position, input)
+      : evaluation.warnings[0] ?? "Risk or market structure is unclear for this selected strategy."
+    : undefined;
+  const spec = buildStrategySpec(position, input, requestedType, noTradeReason);
 
   return {
     spec,
     selectedMode,
+    selectedStrategyMode: selectedMode,
+    evaluatedStrategyType: requestedType,
+    finalRiskVerdict,
+    noTradeRecommended,
+    noTradeReason,
     selectedBy,
     fit: evaluation.fit,
     whyThisStrategy:

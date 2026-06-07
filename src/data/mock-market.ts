@@ -45,7 +45,7 @@ const scenarioSeeds: Record<string, MockSeed> = {
     closePosition: "above_support",
     sentimentScore: -8,
     sentimentLabel: "neutral",
-    newsBias: "Mixed but still holding higher-timeframe support.",
+    newsBias: "Mixed but still holding daily support.",
     communityBias: "Cautious after a pullback.",
     bidAskSpreadPercent: 0.08,
     buyPressure: 54,
@@ -313,7 +313,9 @@ function fallbackSeed(token: EligibleToken): MockSeed {
     closePosition: stable ? "range" : percentChange24h > 1 ? "above_support" : percentChange24h < -1 ? "below_support" : "range",
     sentimentScore: stable ? 0 : Math.round(percentChange24h * 7),
     sentimentLabel: stable ? "neutral" : percentChange24h > 0.8 ? "bullish" : percentChange24h < -0.8 ? "bearish" : "neutral",
-    newsBias: stable ? "Collateral proxy; directional signal is intentionally muted." : "Generic mock context for advanced universe testing.",
+    newsBias: stable
+      ? "Collateral estimate; directional signal is intentionally muted."
+      : "Generic estimated context for advanced universe testing.",
     communityBias: stable ? "Stablecoin context; not a momentum asset." : "Moderate attention with no strong conviction signal.",
     liquidityScore: stable ? 82 : 52 + (token.id % 30),
     fundingBias: stable ? "unavailable" : "neutral",
@@ -353,8 +355,8 @@ function createContext(token: EligibleToken, seed: MockSeed): MarketContext {
     sentiment: {
       score: seed.sentimentScore ?? 0,
       label: sentimentLabel,
-      newsBias: seed.newsBias ?? "Mock news bias; not live data.",
-      communityBias: seed.communityBias ?? "Mock community bias; not live data.",
+      newsBias: seed.newsBias ?? "Estimated news bias; not live data.",
+      communityBias: seed.communityBias ?? "Estimated community bias; not live data.",
     },
     orderBook: {
       bidAskSpreadPercent: seed.bidAskSpreadPercent ?? 0.14,

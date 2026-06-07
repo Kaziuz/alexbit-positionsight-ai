@@ -1,0 +1,563 @@
+export type Language = "en" | "es";
+
+export const languageLabels: Record<Language, string> = {
+  en: "English",
+  es: "Español",
+};
+
+export const translations = {
+  en: {
+    subtitle:
+      "Beginner-friendly crypto position intelligence with live CMC quotes, estimated market context, visual risk levels, and backtest-ready strategy exports.",
+    badge: "CoinMarketCap Strategy Skill MVP",
+    language: "Language",
+    positionInput: "Position input",
+    tokenList: "Token list",
+    beginner: "Beginner",
+    advanced: "Advanced",
+    eligibleToken: "Eligible token",
+    entryPrice: "Entry price",
+    positionSize: "Position size",
+    strategyTimeframe: "Strategy Timeframe",
+    strategyMode: "Strategy mode",
+    maxRiskPercentage: "Max risk percentage",
+    currentPrice: "Current price",
+    move24h: "24h move",
+    volume24h: "Volume 24h",
+    marketCap: "Market cap",
+    source: "Source",
+    pnl: "P/L",
+    unavailable: "Unavailable",
+    cmcLiveQuote: "CMC live quote",
+    coinMarketCapLiveQuote: "CoinMarketCap live quote",
+    mockDataFallback: "Demo fallback",
+    checkInputs: "Check position inputs",
+    positionWarning: "Position warning",
+    tokenCategory: "Category",
+    tokenCategoryNote:
+      "Current MVP uses live quotes when available and estimated context for demo reliability.",
+    entryVsCurrentPrice: "Entry vs current price",
+    loadingMarketContext: "Loading market context...",
+    marketContextReady: "Market context ready",
+    marketContextUnavailable: "Market context is unavailable.",
+    loadingMockMarketContext: "Loading market context.",
+    positionValue: "Position value",
+    marketContext: "Market context",
+    estimatedContextFields: "CoinMarketCap live quote; estimated context fields",
+    trend: "Trend",
+    sentiment: "Sentiment",
+    liquidity: "Liquidity",
+    derivatives: "Derivatives",
+    dataNote: "Data note",
+    strategySignal: "Strategy signal",
+    strategyType: "Strategy type",
+    strategyEvaluated: "Strategy evaluated",
+    riskVerdict: "Risk verdict",
+    fit: "Fit",
+    selectedBy: "Selected by",
+    auto: "Auto",
+    user: "User",
+    estimatedRisk: "Estimated risk",
+    dataSource: "Data source",
+    whyThisStrategy: "Why this strategy?",
+    nextConfirmation: "Next confirmation:",
+    beginnerNote: "Beginner note:",
+    noTradeReason: "No-trade reason",
+    warnings: "Warnings",
+    stopLoss: "Stop loss",
+    takeProfit: "Take profit",
+    chartDataNotes: {
+      live:
+        "CoinMarketCap latest quote is live. The chart path and advanced context are estimated until historical OHLCV is added.",
+      mock: "Demo fallback data is being used because the live CoinMarketCap quote is unavailable.",
+    },
+    backtestReadyJson: "Backtest-ready JSON",
+    exportJson: "Export JSON",
+    demoRange: "Demo range",
+    perStrategy: "per strategy.",
+    strategyPrinciples:
+      "These modes follow patient, risk-first principles: avoid overtrading, wait for confirmation, define invalidation, and avoid unclear setups.",
+    whatIsThis: "What is this?",
+    hideExplanation: "Hide explanation",
+    simpleExplanation: "Simple explanation",
+    bestUsedWhen: "Best used when",
+    avoidWhen: "Avoid when",
+    systemChecks: "What the system checks",
+    entryPriceGreaterThanZero: "Entry price must be greater than 0.",
+    positionSizeGreaterThanZero: "Position size must be greater than 0.",
+    maxRiskRange: "Max risk must stay between",
+    and: "and",
+    entryDistanceWarning: "Entry price is very far from current price. This may be an old position or a typo.",
+    useValidDecimals: "Use dot or comma for decimals, but values must be valid numbers.",
+    fitLabels: {
+      good: "Good",
+      caution: "Caution",
+      poor: "Poor",
+    },
+    riskVerdictLabels: {
+      good: "Good fit",
+      needs_confirmation: "Needs confirmation",
+      poor_fit: "Poor fit",
+      no_trade_recommended: "No-trade recommended",
+    },
+    chartLabels: {
+      stop: "Stop",
+      invalidation: "Invalidation",
+      entry: "Entry",
+      current: "Current",
+      takeProfit: "Take Profit",
+      price: "Price",
+      estimatedProjection: "Estimated projection",
+      pointType: "Point type",
+      pointTypes: {
+        historical_estimate: "Historical estimate",
+        live_quote: "Current live quote",
+        strategy_projection: "Strategy projection",
+      },
+      timeLabels: {
+        "15m": ["-45m", "-30m", "Now", "+15m", "+30m"],
+        "30m": ["-90m", "-60m", "Now", "+30m", "+1h"],
+        "1h": ["-3h", "-2h", "Now", "+1h", "+2h"],
+        "1d": ["-3d", "-1d", "Today", "+1d", "+2d"],
+        "1w": ["-3w", "-1w", "Today", "+1w", "+2w"],
+        "1mo": ["-3mo", "-1mo", "Today", "+1mo", "+2mo"],
+      },
+    },
+    trendStateLabels: {
+      bullish: "Bullish",
+      neutral: "Neutral",
+      bearish: "Bearish",
+    },
+    sentimentLabels: {
+      bullish: "Bullish",
+      neutral: "Neutral",
+      bearish: "Bearish",
+    },
+    derivativesLabels: {
+      long: "Long",
+      neutral: "Neutral",
+      short: "Short",
+      unavailable: "Unavailable",
+    },
+    tokenCategoryLabels: {
+      "Main Assets": "Main Assets",
+      "Stablecoins / Collateral": "Stablecoins / Collateral",
+      "DeFi / Infrastructure / AI": "DeFi / Infrastructure / AI",
+      "Memecoins / Web3 Culture": "Memecoins / Web3 Culture",
+    },
+    messageTranslations: {
+      "Mock market context is unavailable.": "Demo market context is unavailable.",
+      "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are proxy fields until future integrations.":
+        "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+      "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are mock/proxy fields.":
+        "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+      "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.":
+        "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+      "Using mock data fallback because CoinMarketCap live quote is unavailable.":
+        "Demo fallback data is being used because the live CoinMarketCap quote is unavailable.",
+      "Configured risk is too high for a capital-preservation strategy.":
+        "Configured risk is too high for a capital-preservation strategy.",
+      "Current price is too far from entry to create a realistic risk-managed setup.":
+        "Current price is too far from entry to create a realistic risk-managed setup.",
+      "Liquidity proxy is too weak for a beginner-friendly setup.":
+        "The liquidity estimate is too weak for a beginner-friendly setup.",
+      "Trend, sentiment, and liquidity are aligned against the trade.":
+        "Trend, sentiment, and liquidity are aligned against the trade.",
+      "Meme-asset context is high risk and does not have enough liquidity support.":
+        "Meme-asset context is high risk and does not have enough liquidity support.",
+      "Derivatives proxy is unavailable or conflicting while risk is elevated.":
+        "Derivatives context is unavailable or conflicting while risk is elevated.",
+      "Intraday context needs stronger liquidity, momentum, and risk control before a setup is usable.":
+        "Intraday context needs stronger liquidity, momentum, and risk control before a setup is usable.",
+      "Risk is not controlled enough for a defensive setup while market pressure is elevated.":
+        "Risk is not controlled enough for a defensive setup while market pressure is elevated.",
+      "Market structure is unclear, so waiting for a stronger selected-timeframe close is preferred.":
+        "Market structure is unclear, so waiting for a stronger selected-timeframe close is preferred.",
+      "Entry price is too far from current price for a clean risk setup.":
+        "Entry price is too far from current price for a clean risk setup.",
+      "Intraday timeframes are more speculative and need stronger confirmation.":
+        "Intraday timeframes are more speculative and need stronger confirmation.",
+      "Liquidity proxy is weak, so forced strategy signals are unreliable.":
+        "The liquidity estimate is weak, so forced strategy signals are unreliable.",
+      "Meme assets can move quickly; keep position risk small and wait for stronger confirmation.":
+        "Meme assets can move quickly; keep position risk small and wait for stronger confirmation.",
+      "Breakout + Retest needs stronger momentum, volume, and a clear retest or breakout area.":
+        "Breakout + Retest needs stronger momentum, volume, and a clear retest or breakout area.",
+      "Trend Confirmation needs price above support and RSI that is not extremely overheated.":
+        "Trend Confirmation needs price above support and RSI that is not extremely overheated.",
+      "Defensive Rebound only fits when risk is controlled and price is near support.":
+        "Defensive Rebound only fits when risk is controlled and price is near support.",
+      "Auto mode sees a possible setup, but Risk Check is still valid for conservative traders.":
+        "Auto mode sees a possible setup, but Risk Check is still valid for conservative traders.",
+      "Risk or market structure is unclear for this selected strategy.":
+        "Risk or market structure is unclear for this selected strategy.",
+    },
+    decisionCopy: {
+      autoWhy: "Auto Recommended selected the strongest fit for the current context:",
+      manualGood: "The selected strategy matches the current market context.",
+      manualCaution: "The selected strategy is being evaluated, but it needs more confirmation before it is clean.",
+      manualNoTrade:
+        "The selected strategy is being evaluated, but the risk engine currently recommends no-trade conditions.",
+    },
+    nextConfirmationMessages: {
+      trend_following_pullback: "Wait for the selected timeframe to close above support or the trend filter.",
+      breakout_with_volume: "Wait for price to hold above the breakout area after a retest.",
+      defensive_mean_reversion: "Wait for stabilization near support and avoid averaging down without confirmation.",
+      no_trade: "Wait for risk, liquidity, and market structure to improve before taking a new setup.",
+    },
+    beginnerVerdictMessages: {
+      good: "This setup is the cleanest current fit, but risk limits still matter.",
+      needs_confirmation: "This setup is not rejected, but a beginner should wait for stronger confirmation.",
+      poor_fit: "This setup does not fit cleanly. Treat it as research, not an action signal.",
+      no_trade_recommended: "No-trade means protecting capital when the setup is not clear enough.",
+    },
+    tooltips: {
+      tokenList: "Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
+      eligibleToken:
+        "Choose the crypto asset you want to analyze. Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
+      entryPrice: "The price where you bought, or the price where you are considering entering.",
+      positionSize: "How many tokens or coins you hold or plan to buy. This is used to estimate risk.",
+      strategyTimeframe:
+        "Choose the timeframe used to evaluate the setup. Shorter timeframes are more speculative and require stronger confirmation; higher timeframes are better for patient position decisions.",
+      strategyMode:
+        "Auto lets PositionSight choose the most appropriate strategy. Manual mode lets you test a specific strategy and see whether it fits.",
+      maxRiskPercentage: "The maximum percentage of the entry price you are willing to risk if the setup fails.",
+    },
+    strategyModeLabels: {
+      auto: "Auto Recommended",
+      trend_confirmation: "Trend Confirmation",
+      breakout_retest: "Breakout + Retest",
+      defensive_rebound: "Defensive Rebound",
+      risk_check: "Risk Check / No-Trade",
+    },
+    strategyTypeLabels: {
+      trend_following_pullback: "Trend Confirmation",
+      breakout_with_volume: "Breakout + Retest",
+      defensive_mean_reversion: "Defensive Rebound",
+      no_trade: "Risk Check / No-Trade",
+    },
+    timeframeLabels: {
+      "15m": "15m",
+      "30m": "30m",
+      "1h": "1h",
+      "1d": "1d",
+      "1w": "1w",
+      "1mo": "1mo",
+    },
+    strategyExplanations: {
+      auto: {
+        simple:
+          "Lets PositionSight choose the best-fitting strategy based on market context, position risk, trend, liquidity, and momentum.",
+        bestUsedWhen: "Best for beginners or when you want a risk-first recommendation.",
+        avoidWhen: "Avoid when you specifically want to manually test one strategy idea.",
+        checks: "Checks all available strategies and can choose no-trade when risk is poor.",
+        beginnerNote: "Start here if you are unsure which setup fits the current market context.",
+      },
+      trend_confirmation: {
+        simple: "Looks for a setup where the market is showing enough strength to continue after confirmation.",
+        bestUsedWhen: "Best when price is above support, trend is healthy, and risk is controlled.",
+        avoidWhen: "Avoid when price is too extended or sentiment/liquidity are weak.",
+        checks: "Checks trend, support, EMA estimate, RSI estimate, and risk.",
+        beginnerNote: "This mode waits for evidence instead of guessing the bottom.",
+      },
+      breakout_retest: {
+        simple: "Looks for strong movement confirmed by volume, then waits for the breakout area to hold.",
+        bestUsedWhen: "Best when price is breaking resistance with volume and liquidity.",
+        avoidWhen: "Avoid when the move is too extended or the breakout is not confirmed.",
+        checks: "Checks percent change, volume, liquidity, resistance, and sentiment.",
+        beginnerNote: "A breakout is stronger when the market proves the old resistance can hold as support.",
+      },
+      defensive_rebound: {
+        simple: "Used when a position is under pressure but may stabilize near support.",
+        bestUsedWhen: "Best when risk is controlled and price is close to support.",
+        avoidWhen: "Avoid when trend is bearish, liquidity is weak, or you are averaging down blindly.",
+        checks: "Checks support, RSI estimate, risk, liquidity, and invalidation.",
+        beginnerNote: "This is defensive. It is not permission to keep adding to a losing position.",
+      },
+      risk_check: {
+        simple: "Protects you from unclear or risky setups.",
+        bestUsedWhen: "Best when entry is too far, risk is high, liquidity is weak, or signals conflict.",
+        avoidWhen: "Avoid only when you have a clear, risk-controlled setup to test.",
+        checks: "Checks entry distance, risk, trend, liquidity, sentiment, and conflicting signals.",
+        beginnerNote: "Sometimes the best trade is no trade.",
+      },
+    },
+  },
+  es: {
+    subtitle:
+      "Inteligencia de posiciones cripto para principiantes con cotizaciones CMC en vivo, contexto estimado, niveles de riesgo visuales y exportaciones listas para backtesting.",
+    badge: "Skill de estrategia con CoinMarketCap",
+    language: "Idioma",
+    positionInput: "Datos de posición",
+    tokenList: "Lista de tokens",
+    beginner: "Principiante",
+    advanced: "Avanzado",
+    eligibleToken: "Token elegible",
+    entryPrice: "Precio de entrada",
+    positionSize: "Tamaño de posición",
+    strategyTimeframe: "Temporalidad de estrategia",
+    strategyMode: "Modo de estrategia",
+    maxRiskPercentage: "Porcentaje máximo de riesgo",
+    currentPrice: "Precio actual",
+    move24h: "Movimiento 24h",
+    volume24h: "Volumen 24h",
+    marketCap: "Capitalización",
+    source: "Fuente",
+    pnl: "P/G",
+    unavailable: "No disponible",
+    cmcLiveQuote: "Cotización CMC en vivo",
+    coinMarketCapLiveQuote: "Cotización CoinMarketCap en vivo",
+    mockDataFallback: "Respaldo con datos demo",
+    checkInputs: "Revisa los datos",
+    positionWarning: "Advertencia de posición",
+    tokenCategory: "Categoría",
+    tokenCategoryNote:
+      "El MVP usa cotizaciones en vivo cuando están disponibles y contexto estimado para estabilidad de demo.",
+    entryVsCurrentPrice: "Entrada vs precio actual",
+    loadingMarketContext: "Cargando contexto de mercado...",
+    marketContextReady: "Contexto de mercado listo",
+    marketContextUnavailable: "El contexto de mercado no está disponible.",
+    loadingMockMarketContext: "Cargando contexto de mercado.",
+    positionValue: "Valor de posición",
+    marketContext: "Contexto de mercado",
+    estimatedContextFields: "Cotización CoinMarketCap en vivo; campos de contexto estimado",
+    trend: "Tendencia",
+    sentiment: "Sentimiento",
+    liquidity: "Liquidez",
+    derivatives: "Derivados",
+    dataNote: "Nota de datos",
+    strategySignal: "Señal de estrategia",
+    strategyType: "Tipo de estrategia",
+    strategyEvaluated: "Estrategia evaluada",
+    riskVerdict: "Veredicto de riesgo",
+    fit: "Ajuste",
+    selectedBy: "Seleccionado por",
+    auto: "Auto",
+    user: "Usuario",
+    estimatedRisk: "Riesgo estimado",
+    dataSource: "Fuente de datos",
+    whyThisStrategy: "¿Por qué esta estrategia?",
+    nextConfirmation: "Próxima confirmación:",
+    beginnerNote: "Nota para principiantes:",
+    noTradeReason: "Razón para no operar",
+    warnings: "Advertencias",
+    stopLoss: "Stop loss",
+    takeProfit: "Toma de ganancia",
+    chartDataNotes: {
+      live:
+        "La cotización más reciente de CoinMarketCap está en vivo. El recorrido del gráfico y el contexto avanzado son estimados hasta integrar OHLCV histórico.",
+      mock: "Se están usando datos demo porque la cotización en vivo de CoinMarketCap no está disponible.",
+    },
+    backtestReadyJson: "JSON listo para backtesting",
+    exportJson: "Exportar JSON",
+    demoRange: "Rango demo",
+    perStrategy: "por estrategia.",
+    strategyPrinciples:
+      "Estos modos siguen principios pacientes y centrados en riesgo: evitar operar de más, esperar confirmación, definir invalidación y evitar setups poco claros.",
+    whatIsThis: "¿Qué es esto?",
+    hideExplanation: "Ocultar explicación",
+    simpleExplanation: "Explicación simple",
+    bestUsedWhen: "Úsalo cuando",
+    avoidWhen: "Evítalo cuando",
+    systemChecks: "Qué revisa el sistema",
+    entryPriceGreaterThanZero: "El precio de entrada debe ser mayor que 0.",
+    positionSizeGreaterThanZero: "El tamaño de posición debe ser mayor que 0.",
+    maxRiskRange: "El riesgo máximo debe estar entre",
+    and: "y",
+    entryDistanceWarning: "El precio de entrada está muy lejos del precio actual. Puede ser una posición antigua o un error.",
+    useValidDecimals: "Usa punto o coma para decimales, pero los valores deben ser números válidos.",
+    fitLabels: {
+      good: "Bueno",
+      caution: "Precaución",
+      poor: "Pobre",
+    },
+    riskVerdictLabels: {
+      good: "Buen ajuste",
+      needs_confirmation: "Necesita confirmación",
+      poor_fit: "Ajuste débil",
+      no_trade_recommended: "No operar recomendado",
+    },
+    chartLabels: {
+      stop: "Stop",
+      invalidation: "Invalidación",
+      entry: "Entrada",
+      current: "Actual",
+      takeProfit: "Toma de ganancia",
+      price: "Precio",
+      estimatedProjection: "Proyección estimada",
+      pointType: "Tipo de punto",
+      pointTypes: {
+        historical_estimate: "Estimación histórica",
+        live_quote: "Cotización actual en vivo",
+        strategy_projection: "Proyección de estrategia",
+      },
+      timeLabels: {
+        "15m": ["-45m", "-30m", "Ahora", "+15m", "+30m"],
+        "30m": ["-90m", "-60m", "Ahora", "+30m", "+1h"],
+        "1h": ["-3h", "-2h", "Ahora", "+1h", "+2h"],
+        "1d": ["-3d", "-1d", "Hoy", "+1d", "+2d"],
+        "1w": ["-3sem", "-1sem", "Hoy", "+1sem", "+2sem"],
+        "1mo": ["-3mes", "-1mes", "Hoy", "+1mes", "+2mes"],
+      },
+    },
+    trendStateLabels: {
+      bullish: "Alcista",
+      neutral: "Neutral",
+      bearish: "Bajista",
+    },
+    sentimentLabels: {
+      bullish: "Alcista",
+      neutral: "Neutral",
+      bearish: "Bajista",
+    },
+    derivativesLabels: {
+      long: "Largo",
+      neutral: "Neutral",
+      short: "Corto",
+      unavailable: "No disponible",
+    },
+    tokenCategoryLabels: {
+      "Main Assets": "Activos principales",
+      "Stablecoins / Collateral": "Stablecoins / colateral",
+      "DeFi / Infrastructure / AI": "DeFi / infraestructura / IA",
+      "Memecoins / Web3 Culture": "Memecoins / cultura Web3",
+    },
+    messageTranslations: {
+      "Mock market context is unavailable.": "El contexto de mercado demo no está disponible.",
+      "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are proxy fields until future integrations.":
+        "La cotización más reciente de CoinMarketCap está en vivo. Algunos campos avanzados son estimados hasta integrar OHLCV histórico.",
+      "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are mock/proxy fields.":
+        "La cotización más reciente de CoinMarketCap está en vivo. Algunos campos avanzados son estimados hasta integrar OHLCV histórico.",
+      "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.":
+        "La cotización más reciente de CoinMarketCap está en vivo. Algunos campos avanzados son estimados hasta integrar OHLCV histórico.",
+      "Using mock data fallback because CoinMarketCap live quote is unavailable.":
+        "Se están usando datos demo porque la cotización en vivo de CoinMarketCap no está disponible.",
+      "Configured risk is too high for a capital-preservation strategy.":
+        "El riesgo configurado es demasiado alto para una estrategia de preservación de capital.",
+      "Current price is too far from entry to create a realistic risk-managed setup.":
+        "El precio actual está demasiado lejos de la entrada para crear un setup realista con riesgo controlado.",
+      "Liquidity proxy is too weak for a beginner-friendly setup.":
+        "La estimación de liquidez es demasiado débil para un setup amigable para principiantes.",
+      "Trend, sentiment, and liquidity are aligned against the trade.":
+        "Tendencia, sentimiento y liquidez están alineados contra la operación.",
+      "Meme-asset context is high risk and does not have enough liquidity support.":
+        "El contexto del meme asset es de alto riesgo y no tiene suficiente soporte de liquidez.",
+      "Derivatives proxy is unavailable or conflicting while risk is elevated.":
+        "El contexto de derivados no está disponible o muestra conflicto mientras el riesgo es elevado.",
+      "Intraday context needs stronger liquidity, momentum, and risk control before a setup is usable.":
+        "El contexto intradía necesita más liquidez, momentum y control de riesgo antes de ser usable.",
+      "Risk is not controlled enough for a defensive setup while market pressure is elevated.":
+        "El riesgo no está lo bastante controlado para un setup defensivo mientras la presión del mercado es elevada.",
+      "Market structure is unclear, so waiting for a stronger selected-timeframe close is preferred.":
+        "La estructura de mercado no está clara; es mejor esperar un cierre más fuerte en la temporalidad seleccionada.",
+      "Entry price is too far from current price for a clean risk setup.":
+        "El precio de entrada está demasiado lejos del precio actual para un setup limpio de riesgo.",
+      "Intraday timeframes are more speculative and need stronger confirmation.":
+        "Las temporalidades intradía son más especulativas y necesitan más confirmación.",
+      "Liquidity proxy is weak, so forced strategy signals are unreliable.":
+        "La estimación de liquidez es débil, por eso las señales forzadas son poco confiables.",
+      "Meme assets can move quickly; keep position risk small and wait for stronger confirmation.":
+        "Los meme assets pueden moverse rápido; mantén bajo el riesgo y espera más confirmación.",
+      "Breakout + Retest needs stronger momentum, volume, and a clear retest or breakout area.":
+        "Ruptura + retesteo necesita más momentum, volumen y una zona clara de ruptura o retesteo.",
+      "Trend Confirmation needs price above support and RSI that is not extremely overheated.":
+        "Confirmación de tendencia necesita precio sobre soporte y un RSI que no esté extremadamente sobrecalentado.",
+      "Defensive Rebound only fits when risk is controlled and price is near support.":
+        "Rebote defensivo solo encaja cuando el riesgo está controlado y el precio está cerca de soporte.",
+      "Auto mode sees a possible setup, but Risk Check is still valid for conservative traders.":
+        "El modo Auto ve un posible setup, pero Revisión de riesgo sigue siendo válida para perfiles conservadores.",
+      "Risk or market structure is unclear for this selected strategy.":
+        "El riesgo o la estructura de mercado no están claros para esta estrategia seleccionada.",
+    },
+    decisionCopy: {
+      autoWhy: "Auto recomendado eligió el mejor ajuste para el contexto actual:",
+      manualGood: "La estrategia seleccionada encaja con el contexto actual de mercado.",
+      manualCaution: "La estrategia seleccionada se está evaluando, pero necesita más confirmación antes de estar limpia.",
+      manualNoTrade:
+        "La estrategia seleccionada se está evaluando, pero el motor de riesgo actualmente recomienda condiciones de no operar.",
+    },
+    nextConfirmationMessages: {
+      trend_following_pullback: "Espera un cierre de la temporalidad seleccionada sobre soporte o el filtro de tendencia.",
+      breakout_with_volume: "Espera que el precio se mantenga sobre la zona de ruptura después de un retesteo.",
+      defensive_mean_reversion: "Espera estabilización cerca del soporte y evita promediar sin confirmación.",
+      no_trade: "Espera a que mejoren riesgo, liquidez y estructura de mercado antes de buscar un nuevo setup.",
+    },
+    beginnerVerdictMessages: {
+      good: "Este setup es el ajuste más limpio por ahora, pero los límites de riesgo siguen siendo importantes.",
+      needs_confirmation: "Este setup no está rechazado, pero un principiante debería esperar más confirmación.",
+      poor_fit: "Este setup no encaja de forma limpia. Trátalo como investigación, no como señal de acción.",
+      no_trade_recommended: "No operar significa proteger capital cuando el setup no está suficientemente claro.",
+    },
+    tooltips: {
+      tokenList: "Modo Principiante muestra una lista más corta; Avanzado muestra más tokens soportados por el hackathon.",
+      eligibleToken:
+        "Elige el criptoactivo que quieres analizar. Principiante muestra una lista corta; Avanzado muestra más tokens soportados por el hackathon.",
+      entryPrice: "El precio donde compraste, o el precio donde estás considerando entrar.",
+      positionSize: "Cuántos tokens o monedas tienes o planeas comprar. Se usa para estimar riesgo.",
+      strategyTimeframe:
+        "Elige la temporalidad para evaluar la estrategia. Temporalidades cortas son más especulativas y requieren más confirmación; temporalidades altas son mejores para decisiones más pacientes.",
+      strategyMode:
+        "Auto deja que PositionSight elija la estrategia más adecuada. Manual te permite probar una estrategia específica y ver si encaja.",
+      maxRiskPercentage: "El porcentaje máximo del precio de entrada que estás dispuesto a arriesgar si el setup falla.",
+    },
+    strategyModeLabels: {
+      auto: "Auto recomendado",
+      trend_confirmation: "Confirmación de tendencia",
+      breakout_retest: "Ruptura + retesteo",
+      defensive_rebound: "Rebote defensivo",
+      risk_check: "Revisión de riesgo / No operar",
+    },
+    strategyTypeLabels: {
+      trend_following_pullback: "Confirmación de tendencia",
+      breakout_with_volume: "Ruptura + retesteo",
+      defensive_mean_reversion: "Rebote defensivo",
+      no_trade: "Revisión de riesgo / No operar",
+    },
+    timeframeLabels: {
+      "15m": "15m",
+      "30m": "30m",
+      "1h": "1h",
+      "1d": "1d",
+      "1w": "1s",
+      "1mo": "1 mes",
+    },
+    strategyExplanations: {
+      auto: {
+        simple:
+          "Deja que PositionSight elija la estrategia que mejor encaja según contexto de mercado, riesgo, tendencia, liquidez y momentum.",
+        bestUsedWhen: "Ideal para principiantes o cuando quieres una recomendación centrada en riesgo.",
+        avoidWhen: "Evítalo si quieres probar manualmente una idea de estrategia específica.",
+        checks: "Revisa todas las estrategias disponibles y puede elegir no operar cuando el riesgo es malo.",
+        beginnerNote: "Empieza aquí si no sabes qué setup encaja con el contexto actual.",
+      },
+      trend_confirmation: {
+        simple: "Busca un setup donde el mercado muestra suficiente fuerza para continuar después de confirmar.",
+        bestUsedWhen: "Úsalo cuando el precio está sobre soporte, la tendencia está sana y el riesgo está controlado.",
+        avoidWhen: "Evítalo cuando el precio está demasiado extendido o sentimiento/liquidez son débiles.",
+        checks: "Revisa tendencia, soporte, EMA estimada, RSI estimado y riesgo.",
+        beginnerNote: "Este modo espera evidencia en vez de adivinar el fondo.",
+      },
+      breakout_retest: {
+        simple: "Busca un movimiento fuerte confirmado por volumen y espera que la zona de ruptura se mantenga.",
+        bestUsedWhen: "Úsalo cuando el precio rompe resistencia con volumen y liquidez.",
+        avoidWhen: "Evítalo cuando el movimiento está demasiado extendido o la ruptura no está confirmada.",
+        checks: "Revisa cambio porcentual, volumen, liquidez, resistencia y sentimiento.",
+        beginnerNote: "Una ruptura es más fuerte cuando el mercado demuestra que la vieja resistencia puede sostenerse como soporte.",
+      },
+      defensive_rebound: {
+        simple: "Se usa cuando una posición está bajo presión pero podría estabilizarse cerca de soporte.",
+        bestUsedWhen: "Úsalo cuando el riesgo está controlado y el precio está cerca de soporte.",
+        avoidWhen: "Evítalo cuando la tendencia es bajista, la liquidez es débil o estás promediando a ciegas.",
+        checks: "Revisa soporte, RSI estimado, riesgo, liquidez e invalidación.",
+        beginnerNote: "Es defensivo. No es permiso para seguir agregando a una posición perdedora.",
+      },
+      risk_check: {
+        simple: "Te protege de setups poco claros o demasiado riesgosos.",
+        bestUsedWhen: "Úsalo cuando la entrada está lejos, el riesgo es alto, la liquidez es débil o las señales se contradicen.",
+        avoidWhen: "Evítalo solo cuando tienes un setup claro y con riesgo controlado para probar.",
+        checks: "Revisa distancia de entrada, riesgo, tendencia, liquidez, sentimiento y señales contradictorias.",
+        beginnerNote: "A veces la mejor operación es no operar.",
+      },
+    },
+  },
+} as const;

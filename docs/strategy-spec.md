@@ -1,10 +1,8 @@
 # PositionSight AI - Strategy Specification
 
-PositionSight AI is an AI-powered crypto intelligence and strategy skill.
+PositionSight AI is a crypto intelligence and strategy skill for the Crypto Intelligence / Strategy Skills track.
 
-The strategy engine is Goodman-inspired: it favors patient trend confirmation, breakout/retest structure, trailing exits, quick invalidation, and capital preservation over day trading or constant signal generation.
-
-The goal is to help users convert a crypto position, market data, and risk profile into a clear, explainable, and backtestable trading strategy.
+The engine is Goodman-inspired in a broad, paraphrased sense: it favors confirmation, breakout/retest structure, trailing exits, quick invalidation, and capital preservation over constant signal generation.
 
 This project is not a live trading bot and does not provide financial advice. It is a decision-support and educational tool for strategy generation, risk visualization, and structured backtesting.
 
@@ -18,11 +16,13 @@ The strategy engine receives:
 * Entry price
 * Current price
 * Position size
-* Timeframe
+* Strategy timeframe: `15m`, `30m`, `1h`, `1d`, `1w`, or `1mo`
+* Timeframe category: `intraday`, `daily`, `weekly`, or `monthly`
+* Analysis interval: same as the selected strategy timeframe
 * Maximum risk percentage
 * Market data source
 * Market quote
-* Technical context
+* Technical context, estimated until historical OHLCV is integrated
 * Risk profile
 
 Example input:
@@ -32,19 +32,40 @@ Example input:
   "symbol": "AVAX",
   "entryPrice": 34,
   "positionSize": 2,
-  "timeframe": "4h",
+  "strategyTimeframe": "1d",
+  "timeframeCategory": "daily",
+  "analysisInterval": "1d",
   "maxRiskPercentage": 3
 }
 ```
 
 ---
 
-## Output Fields
+## Strategy Timeframe
 
-The strategy engine converts a user position and a market quote into a structured JSON object designed for backtesting and review.
+Supported strategy timeframes:
+
+* `15m`: Intraday research context. Requires stronger liquidity, momentum, and risk control.
+* `30m`: Intraday research context. Still speculative and confirmation-heavy.
+* `1h`: Short-term context with moderate strictness.
+* `1d`: Default balanced context for patient position decisions.
+* `1w`: Higher-timeframe context for more patient trend confirmation.
+* `1mo`: Highest-timeframe context for long-range structure and risk review.
+
+Intraday timeframes are supported for testing and strategy research. The engine does not automatically block them, but it treats them as higher-risk and more speculative. Higher timeframes are better suited to patient, risk-first decisions.
+
+---
+
+## StrategySpec
+
+`StrategySpec` is the stable human-readable strategy object.
+
+Fields:
 
 * `asset`: Token symbol.
-* `timeframe`: Strategy timeframe.
+* `strategyTimeframe`: Selected timeframe.
+* `timeframeCategory`: Derived timeframe category.
+* `analysisInterval`: Backtest interval, matching the selected timeframe.
 * `strategyType`: One of `trend_following_pullback`, `breakout_with_volume`, `defensive_mean_reversion`, or `no_trade`.
 * `entryCondition`: Human-readable condition for a valid strategy entry.
 * `exitCondition`: Human-readable condition for exit or reduction.
@@ -54,26 +75,29 @@ The strategy engine converts a user position and a market quote into a structure
 * `riskRules`: Max risk, position size, estimated risk amount, and optional no-trade reason.
 * `dataUsed`: Entry price, current price, 24h change, volume, market cap, data source, and timestamp.
 
-The `StrategySpec` shape remains stable so backtesting tools can depend on it.
-
 ---
 
 ## StrategyDecision Wrapper
 
-The UI can also export a richer `StrategyDecision` wrapper around the stable `StrategySpec`.
+The UI exports a richer `StrategyDecision` wrapper around `StrategySpec`.
 
 `StrategyDecision` includes:
 
-* `spec`: The unchanged backtest-ready `StrategySpec`.
+* `spec`: The strategy specification.
 * `selectedMode`: The user's selected strategy mode.
-* `selectedBy`: `auto` when PositionSight chooses the mode, or `user` when the user tests a manual mode.
+* `selectedStrategyMode`: Same selected mode, repeated for export consumers.
+* `evaluatedStrategyType`: The strategy type currently being evaluated in the UI.
+* `finalRiskVerdict`: `good`, `needs_confirmation`, `poor_fit`, or `no_trade_recommended`.
+* `noTradeRecommended`: Boolean risk verdict flag.
+* `noTradeReason`: Optional reason shown when the risk engine recommends no-trade.
+* `selectedBy`: `auto` or `user`.
 * `fit`: `good`, `caution`, or `poor`.
 * `whyThisStrategy`: Plain-English reason for the selected or rejected setup.
 * `warnings`: Beginner-friendly warnings when a chosen strategy does not fit.
 * `nextConfirmation`: What the user should wait for before acting.
 * `beginnerExplanation`: Short educational explanation of the decision.
 
-When the user manually selects a poor-fitting strategy, PositionSight does not blindly force it. It can return a `no_trade` spec with warnings while preserving the selected mode in the decision metadata.
+When the user manually selects a poor-fitting strategy, PositionSight does not hide that selection. The UI shows the selected/evaluated strategy separately from the risk verdict, so a manual `Trend Confirmation` test can still display `no_trade_recommended` as the risk outcome.
 
 ---
 
@@ -84,35 +108,64 @@ The downloaded JSON is a strict artifact wrapper for backtesting tools and other
 Top-level fields:
 
 * `schemaVersion`: Currently `1.0.0`.
-* `skill`: Metadata for the skill name, hackathon track, and artifact type.
-* `inputSchema`: Machine-readable description of `symbol`, `entryPrice`, `positionSize`, `timeframe`, `maxRiskPercentage`, and `strategyMode`.
+* `skill`: Metadata for skill name, track, and artifact type.
+* `inputSchema`: Machine-readable description of position inputs, strategy timeframe, and strategy mode.
 * `dataProvenance`: Source, live/mock status, intended live source, and generation timestamp.
-* `dataRequirements`: Required OHLCV series, interval, lookback periods, and required indicators.
+* `chartSeriesType`: Currently `estimated_projection`.
+* `advancedContextType`: Currently `estimated_until_ohlcv`.
+* `dataRequirements`: OHLCV requirements, minimum history, lookback periods, and required indicators.
+* `selectedStrategyMode`: Strategy mode chosen by the user or Auto Recommended.
+* `evaluatedStrategyType`: Strategy type evaluated for the current decision.
+* `finalRiskVerdict`: Machine-readable risk verdict.
+* `noTradeRecommended`: Boolean flag for abstain/no-trade recommendation.
+* `noTradeReason`: Optional abstain/no-trade reason.
 * `backtestSpec`: Machine-readable strategy contract.
 * `executionAssumptions`: Starting capital, fees, slippage, order type, and no-short/no-leverage constraints.
 * `evaluationMetrics`: Metrics a backtest runner should calculate.
 * `validation`: Backtest readiness and limitations.
-* `strategySpec`: Stable human-readable strategy specification.
+* `strategySpec`: Human-readable strategy specification.
 * `strategyDecision`: User/auto selection metadata and warnings.
-* `marketContext`: CMC-ready context used to produce the strategy. Latest quote fields may come from CoinMarketCap live quotes or mock fallback.
+* `marketContext`: CMC-ready context used to produce the strategy.
 * `explanation`: Human-readable explanation.
 * `warnings`: Human-readable warnings.
 
-### Human-Readable vs Machine-Readable Output
+### Data Requirements
 
-`strategySpec` is optimized for humans and demos. It explains the asset, timeframe, strategy type, entry condition, exit condition, stop loss, take profit, invalidation level, risk rules, and data used.
+```json
+{
+  "requiredSeries": ["open", "high", "low", "close", "volume"],
+  "interval": "1d",
+  "minimumHistoryDays": 200,
+  "lookbackPeriods": 200,
+  "requiredIndicators": ["ema20", "ema50", "ema200", "rsi14", "atr14", "support", "resistance"]
+}
+```
 
-`backtestSpec` is optimized for machines. It expresses the same idea as structured rules:
+For `1w` and `1mo`, the export includes `aggregationHint: "weekly"` or `aggregationHint: "monthly"` so a backtest runner can aggregate base OHLCV correctly.
 
-* `signal`: `LONG`, `REDUCE`, `CONDITIONAL_LONG`, `EXIT`, or `ABSTAIN`.
-* `shouldOpenPosition`: Boolean permission for a backtest runner to open a position.
-* `entryRule`: Machine-readable entry requirements.
-* `exitRule`: Machine-readable exit requirements.
-* `stopRule`: Stop-loss trigger.
-* `takeProfitRule`: Profit target and trailing behavior.
-* `invalidationRule`: Thesis invalidation trigger.
-* `positionSizing`: Risk-based sizing inputs.
-* `riskManagement`: Risk, liquidity, sentiment, and execution constraints.
+### BacktestSpec
+
+`backtestSpec` is optimized for machines.
+
+It includes:
+
+* `strategyType`
+* `strategyTimeframe`
+* `timeframeCategory`
+* `analysisInterval`
+* Optional `aggregationHint` for weekly/monthly analysis
+* Optional intraday `warning`
+* `signal`: `LONG`, `REDUCE`, `CONDITIONAL_LONG`, `EXIT`, or `ABSTAIN`
+* `shouldOpenPosition`
+* `entryRule`
+* `exitRule`
+* `stopRule`
+* `takeProfitRule`
+* `invalidationRule`
+* `positionSizing`
+* `riskManagement`
+
+For intraday selections, `backtestSpec.warning` notes that shorter timeframes require stronger confirmation and may be more speculative.
 
 ### No-Trade As ABSTAIN
 
@@ -132,7 +185,7 @@ When `strategyType` is `no_trade`, the export uses:
 }
 ```
 
-This keeps no-trade as a first-class backtestable outcome instead of treating it as missing data.
+This keeps no-trade as a first-class backtestable outcome.
 
 ---
 
@@ -140,13 +193,13 @@ This keeps no-trade as a first-class backtestable outcome instead of treating it
 
 The UI supports:
 
-* `Auto Recommended`: PositionSight selects the best fit from the current mock context.
-* `Trend Confirmation`: Tests whether a trend-following pullback setup fits.
-* `Breakout + Retest`: Tests whether a breakout setup has momentum, volume, and retest logic.
+* `Auto Recommended`: PositionSight selects the best fit from current market context.
+* `Trend Confirmation`: Tests whether a continuation setup fits after confirmation.
+* `Breakout + Retest`: Tests whether breakout momentum, volume, and retest logic are present.
 * `Defensive Rebound`: Tests whether a conservative recovery setup is valid.
 * `Risk Check / No-Trade`: Tests whether avoiding the trade is the best risk-management outcome.
 
-Auto is the default because the MVP is designed for beginners.
+Each strategy mode has bilingual beginner explanations in English and Spanish. The explanations are educational and not financial advice.
 
 ---
 
@@ -162,7 +215,7 @@ GET https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest
 
 from a Next.js API route only. The browser never receives `CMC_API_KEY`.
 
-When `CMC_API_KEY` is configured and CoinMarketCap responds successfully, `MarketContext.source` is `coinmarketcap` and the quote fields use live latest quote data:
+When `CMC_API_KEY` is configured and CoinMarketCap responds successfully, `MarketContext.source` is `coinmarketcap` and quote fields use live latest quote data:
 
 * Current price
 * 24h percent change
@@ -172,122 +225,24 @@ When `CMC_API_KEY` is configured and CoinMarketCap responds successfully, `Marke
 
 When the key is missing or the request fails, `MarketContext.source` is `mock` and the route returns deterministic mock data with a fallback warning.
 
-The current model is CMC-ready and grouped as `MarketContext`:
-
-* `quote`: Current price, 24h change, 24h volume, market cap, timestamp, and source.
-* `technicals`: EMA proxy values, RSI, ATR, support, resistance, trend state, and close-position state.
-* `sentiment`: Mock/proxy sentiment score, label, news bias, and community bias.
-* `orderBook`: Mock/proxy spread, buy pressure, sell pressure, and liquidity score.
-* `derivatives`: Mock/proxy funding bias, open-interest change, and long/short bias.
-
-Important: the latest quote endpoint does not provide the full technical, sentiment, order book, or derivatives model. Those fields remain mock/proxy context for now even when the latest quote itself is live. They are included so future real CMC quotes, OHLCV, market-pair liquidity, news/community signals, and other available data can be mapped into the same shape.
-
-Future versions may include:
-
-* Historical OHLCV
-* Volatility
-* Sentiment
-* News signals
-* Derivatives data
-* On-chain context
+CoinMarketCap latest quote fields are live when `CMC_API_KEY` is configured. The chart path and some advanced context fields are estimated until historical OHLCV is added. Future versions should map historical OHLCV, market-pair liquidity, news/community signals, and other available data into the same `MarketContext` shape.
 
 ---
 
-## Strategy Types
+## Strategy Selection Logic
 
-### 1. Trend-Following Pullback
+The current MVP uses deterministic, timeframe-aware rules:
 
-Used as a trend-confirmation setup when the asset is in a constructive trend and risk remains controlled.
+* `15m` and `30m`: stricter liquidity, volume, confirmation, and risk requirements.
+* `1h`: moderate short-term strictness.
+* `1d`: balanced default context.
+* `1w` and `1mo`: more patient trend confirmation.
+* `no_trade`: risk setting is high, current price is too far from entry, structure is unclear, liquidity is weak, trend/sentiment are weak, or meme-asset context is fragile.
+* `breakout_with_volume`: positive movement, volume, buy pressure/liquidity, and breakout/retest behavior are supportive.
+* `defensive_mean_reversion`: position is under pressure or near support, but risk and liquidity are controlled.
+* `trend_following_pullback`: price is above support, trend filters are constructive, RSI is not extremely overbought, and risk is controlled.
 
-Conditions:
-
-* Price remains above entry or a key trend area.
-* Momentum is constructive but not overextended.
-* Entry price is close enough to the current market structure.
-* Risk-to-reward remains acceptable.
-
-Output:
-
-* Suggested hold or continuation setup after confirmation.
-* Stop loss below support or structural invalidation.
-* Take profit using a simple reward-to-risk multiple.
-* Invalidation level below the thesis structure, with room to trail winners.
-
----
-
-### 2. Breakout With Volume
-
-Used when price shows strong positive movement, volume confirms momentum, and the setup can be framed as a breakout followed by a retest or failure level.
-
-Conditions:
-
-* 24h move is strongly positive.
-* Volume is elevated.
-* Price action suggests continuation after breakout confirmation.
-* Risk-to-reward is acceptable.
-
-Output:
-
-* Breakout continuation setup with retest confirmation.
-* Stop loss below breakout or invalidation zone.
-* Take profit based on risk multiple.
-* Exit if breakout fails or a period close loses the retest area.
-
----
-
-### 3. Defensive Mean Reversion
-
-Used conservatively when a position is under pressure or recent movement is weak, but risk remains controlled.
-
-Conditions:
-
-* Current price is below or near the user entry.
-* 24h movement is materially negative.
-* The asset may be oversold or extended.
-* Risk remains controlled enough to avoid turning a small loss into a large one.
-
-Output:
-
-* Defensive rebound setup.
-* Conservative stop loss.
-* Partial recovery target.
-* Clear invalidation level and quick loss-cutting rule.
-
----
-
-### 4. No-Trade Signal
-
-Used when conditions are unclear, risk is too high, or the requested setup is too speculative for the MVP framework.
-
-Conditions:
-
-* Risk setting is too aggressive.
-* Current price is too far from entry.
-* Price movement is extreme.
-* Signals conflict.
-* Risk-to-reward is poor.
-* The user selects a `15m` timeframe without unusually clear momentum, volume, and controlled risk.
-
-Output:
-
-* No-trade recommendation.
-* Reason for invalid setup.
-* Conditions needed before reconsidering, usually on a higher timeframe close.
-
-This is an important part of PositionSight AI because avoiding bad trades is part of risk management.
-
----
-
-## Current MVP Strategy Selection Logic
-
-The current MVP uses deterministic, Goodman-inspired rules:
-
-* `no_trade`: Risk setting is high, current price is too far from entry, structure is unclear, the `15m` timeframe is speculative, liquidity is weak, or meme-asset context is fragile.
-* `breakout_with_volume`: 24h change is strongly positive, volume is elevated, buy pressure/liquidity are supportive, and price action suggests breakout/retest behavior.
-* `defensive_mean_reversion`: Position is under pressure or near support, but risk and liquidity are controlled.
-* `trend_following_pullback`: Trend-confirmation setup when price is above support, trend filters are constructive, RSI is not extremely overbought, and risk is controlled.
-
-These rules are intentionally simple for the first hackathon milestone. They make the output explainable and easy to replace with a more advanced AI strategy generator later.
+The engine does not no-trade solely because the selected timeframe is intraday.
 
 ---
 
@@ -296,10 +251,12 @@ These rules are intentionally simple for the first hackathon milestone. They mak
 ```json
 {
   "asset": "AVAX",
-  "timeframe": "4h",
+  "strategyTimeframe": "1d",
+  "timeframeCategory": "daily",
+  "analysisInterval": "1d",
   "strategyType": "defensive_mean_reversion",
   "entryCondition": "Do not add exposure unless risk is controlled and price stabilizes near support with evidence of a rebound.",
-  "exitCondition": "Reduce quickly if price loses the stop level, and only hold for recovery if a higher timeframe close confirms support.",
+  "exitCondition": "Reduce quickly if price loses the stop level, and only hold for recovery if the selected timeframe confirms support.",
   "stopLoss": 32.98,
   "takeProfit": 35.84,
   "invalidationLevel": 32.98,
@@ -322,39 +279,35 @@ These rules are intentionally simple for the first hackathon milestone. They mak
 
 ---
 
+## UI Language Support
+
+The app supports:
+
+* English
+* Spanish
+
+The language toggle changes major UI labels, tooltips, warnings, and strategy education cards.
+
+---
+
 ## Backtesting Goal
 
-Every generated strategy should be exportable as a structured specification.
-
-The MVP should allow users to export:
+Every generated strategy should be exportable as a structured specification with:
 
 * Asset
-* Timeframe
+* Strategy timeframe
+* Analysis interval
 * Entry rule
 * Exit rule
 * Stop rule
 * Take profit rule
 * Invalidation rule
 * Risk parameters
-* Data used
+* Data provenance
+* Execution assumptions
+* Evaluation metrics
 
-The goal is to make every AI-generated strategy testable instead of vague.
-
----
-
-## Hackathon Alignment
-
-PositionSight AI aligns with the hackathon by focusing on:
-
-* Crypto intelligence
-* Strategy generation
-* CoinMarketCap market data
-* Explainable AI output
-* Risk visualization
-* Backtestable strategy specifications
-* Clear user experience for traders
-
-The project is designed for the Crypto Intelligence / Strategy Skill track, not as a live on-chain trading bot.
+The goal is to make every generated strategy testable instead of vague.
 
 ---
 

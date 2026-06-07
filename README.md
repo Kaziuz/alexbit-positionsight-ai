@@ -22,9 +22,14 @@ Because this project does not execute trades and does not deploy or control an o
 - Fetches live latest quote data from CoinMarketCap through a server-side API route.
 - Falls back to local mock market context safely when CoinMarketCap is unavailable.
 - Visualizes current price vs entry price.
+- Shows a timeframe-aware estimated projection until real OHLCV paths are added.
 - Shows risk, stop loss, take profit, and invalidation levels.
 - Provides Beginner and Advanced eligible token modes.
+- Provides English and Spanish UI language options.
+- Supports strategy timeframes of 15m, 30m, 1h, 1d, 1w, and 1mo.
+- Treats intraday timeframes as higher-risk research contexts that require stronger confirmation.
 - Lets users choose Auto Recommended or a manual strategy mode.
+- Explains each strategy mode with beginner-friendly educational cards.
 - Generates an explainable strategy decision and risk signal.
 - Displays market context, strategy fit, warnings, and next confirmation.
 - Exports a machine-readable backtest-ready JSON artifact.
@@ -119,6 +124,10 @@ It includes:
 - `dataRequirements`
 - `strategySpec`
 - `strategyDecision`
+- `selectedStrategyMode`
+- `evaluatedStrategyType`
+- `finalRiskVerdict`
+- `noTradeRecommended`
 - `marketContext`
 - `backtestSpec`
 - `executionAssumptions`
@@ -135,7 +144,10 @@ The export preserves both human-readable strategy explanations and machine-reada
 - `.env.local` ignored by Git.
 - Mock fallback when CoinMarketCap live quote is unavailable.
 - Beginner / Advanced eligible token mode.
+- English / Spanish language toggle.
+- Strategy Timeframe selector: 15m, 30m, 1h, 1d, 1w, 1mo.
 - Strategy mode selector.
+- Beginner-friendly strategy explanation cards.
 - Risk visualization.
 - Strategy signal panel.
 - Market context panel.
@@ -156,14 +168,18 @@ The export preserves both human-readable strategy explanations and machine-reada
 ## Current Limitations
 
 - CoinMarketCap latest quote data is live when `CMC_API_KEY` is configured.
-- Technicals, sentiment, order book, and derivatives are currently mock/proxy fields.
+- Some advanced context fields are estimated until historical OHLCV is integrated.
+- Chart projection is deterministic estimated behavior until historical OHLCV is integrated.
+- Strategy analysis supports 15m, 30m, 1h, 1d, 1w, and 1mo contexts.
+- Intraday timeframes are supported for testing and research, but the engine treats them with more caution and does not encourage overtrading.
 - Historical OHLCV and real indicator calculations are planned next.
 - There is no live trade execution.
 - Strategy output is educational and not financial advice.
 
 ## Roadmap
 
-- Strategy horizon selection: 1 day, 3 days, 7 days.
+- Strategy timeframe selection: 15m, 30m, 1h, 1d, 1w, 1mo.
+- Historical OHLCV and timeframe-aware backtest assumptions.
 - Historical OHLCV integration.
 - Real EMA / RSI / ATR calculations.
 - Basic backtest runner.

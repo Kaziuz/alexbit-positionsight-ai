@@ -13,54 +13,42 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { beginnerTokenSet, eligibleTokenUniverse, eligibleTokensByCategory } from "@/data/eligible-tokens";
 import { formatCompact, formatCurrency, formatPercentage } from "@/lib/format";
+import { languageLabels, translations, type Language } from "@/lib/i18n";
 import { parseLocalizedNumberInput } from "@/lib/number-input";
 import { createStrategyExport } from "@/lib/strategy-export";
 import { generateStrategyDecision } from "@/lib/strategy-engine";
+import { getTimeframeCategory, strategyTimeframes } from "@/lib/strategy-timeframe";
 import type {
   MarketContext,
   MarketQuote,
   PositionInput,
+  RiskVerdict,
   StrategyDecision,
   StrategyMode,
-  Timeframe,
+  StrategyTimeframe,
+  TokenCategory,
 } from "@/types/strategy";
 import { MetricTile } from "./MetricTile";
 import { PricePositionChart } from "./PricePositionChart";
 
-const timeframes: Timeframe[] = ["15m", "1h", "4h", "1d"];
 const minRiskPercentage = 1;
 const maxRiskPercentage = 6;
 
-const strategyModes: Array<{ value: StrategyMode; label: string }> = [
-  { value: "auto", label: "Auto Recommended" },
-  { value: "trend_confirmation", label: "Trend Confirmation" },
-  { value: "breakout_retest", label: "Breakout + Retest" },
-  { value: "defensive_rebound", label: "Defensive Rebound" },
-  { value: "risk_check", label: "Risk Check / No-Trade" },
-];
+const strategyModes: StrategyMode[] = ["auto", "trend_confirmation", "breakout_retest", "defensive_rebound", "risk_check"];
 
 const initialPosition: PositionInput = {
   symbol: "AVAX",
   entryPrice: 34,
   positionSize: 2,
-  timeframe: "4h",
+  strategyTimeframe: "1d",
+  timeframeCategory: "daily",
+  analysisInterval: "1d",
   maxRiskPercentage: 3,
   strategyMode: "auto",
 };
 
 function clampRiskPercentage(value: number) {
   return Math.min(Math.max(value, minRiskPercentage), maxRiskPercentage);
-}
-
-function getStrategyLabel(strategyType: StrategyDecision["spec"]["strategyType"]) {
-  const labels = {
-    trend_following_pullback: "Trend Confirmation",
-    breakout_with_volume: "Breakout + Retest",
-    defensive_mean_reversion: "Defensive Rebound",
-    no_trade: "Risk Check / No-Trade",
-  };
-
-  return labels[strategyType];
 }
 
 function getQuoteFromContext(context: MarketContext): MarketQuote {
@@ -85,6 +73,46 @@ function getFitTone(fit: StrategyDecision["fit"]) {
   }
 
   return "warning";
+}
+
+function getRiskVerdictTone(verdict: RiskVerdict) {
+  if (verdict === "good") {
+    return "positive";
+  }
+
+  if (verdict === "needs_confirmation") {
+    return "warning";
+  }
+
+  return "negative";
+}
+
+type TranslationSet = (typeof translations)[Language];
+
+function translateMessage(message: string | undefined, t: TranslationSet) {
+  if (!message) {
+    return "";
+  }
+
+  return t.messageTranslations[message as keyof typeof t.messageTranslations] ?? message;
+}
+
+function getLocalizedDecisionText(decision: StrategyDecision, t: TranslationSet) {
+  const evaluatedLabel = t.strategyTypeLabels[decision.evaluatedStrategyType];
+  const whyThisStrategy =
+    decision.selectedBy === "auto"
+      ? `${t.decisionCopy.autoWhy} ${evaluatedLabel}.`
+      : decision.noTradeRecommended
+        ? t.decisionCopy.manualNoTrade
+        : decision.fit === "good"
+          ? t.decisionCopy.manualGood
+          : t.decisionCopy.manualCaution;
+
+  return {
+    whyThisStrategy,
+    nextConfirmation: t.nextConfirmationMessages[decision.evaluatedStrategyType],
+    beginnerExplanation: t.beginnerVerdictMessages[decision.finalRiskVerdict],
+  };
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -118,9 +146,12 @@ export function PositionStrategyApp() {
   const [entryPriceInput, setEntryPriceInput] = useState(String(initialPosition.entryPrice));
   const [positionSizeInput, setPositionSizeInput] = useState(String(initialPosition.positionSize));
   const [tokenMode, setTokenMode] = useState<"beginner" | "advanced">("beginner");
+  const [language, setLanguage] = useState<Language>("en");
+  const [expandedStrategyMode, setExpandedStrategyMode] = useState<StrategyMode | null>("auto");
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
+  const t = translations[language];
 
   const availableTokens = tokenMode === "beginner" ? beginnerTokenSet : eligibleTokenUniverse;
   const selectedToken =
@@ -144,15 +175,15 @@ export function PositionStrategyApp() {
     const messages: string[] = [];
 
     if (!parsedEntryPrice.ok) {
-      messages.push(entryPriceInput.trim() ? parsedEntryPrice.error : "Entry price must be greater than 0.");
+      messages.push(entryPriceInput.trim() ? t.useValidDecimals : t.entryPriceGreaterThanZero);
     } else if (parsedEntryPrice.value <= 0) {
-      messages.push("Entry price must be greater than 0.");
+      messages.push(t.entryPriceGreaterThanZero);
     }
 
     if (!parsedPositionSize.ok) {
-      messages.push(positionSizeInput.trim() ? parsedPositionSize.error : "Position size must be greater than 0.");
+      messages.push(positionSizeInput.trim() ? t.useValidDecimals : t.positionSizeGreaterThanZero);
     } else if (parsedPositionSize.value <= 0) {
-      messages.push("Position size must be greater than 0.");
+      messages.push(t.positionSizeGreaterThanZero);
     }
 
     if (
@@ -160,11 +191,11 @@ export function PositionStrategyApp() {
       position.maxRiskPercentage < minRiskPercentage ||
       position.maxRiskPercentage > maxRiskPercentage
     ) {
-      messages.push(`Max risk must stay between ${minRiskPercentage}% and ${maxRiskPercentage}%.`);
+      messages.push(`${t.maxRiskRange} ${minRiskPercentage}% and ${maxRiskPercentage}%.`);
     }
 
     return messages;
-  }, [entryPriceInput, parsedEntryPrice, parsedPositionSize, position.maxRiskPercentage, positionSizeInput]);
+  }, [entryPriceInput, parsedEntryPrice, parsedPositionSize, position.maxRiskPercentage, positionSizeInput, t]);
   const isPositionValid = validationMessages.length === 0;
   const entryDistanceWarning =
     quote && normalizedPosition
@@ -172,9 +203,9 @@ export function PositionStrategyApp() {
       : false;
   const warningMessages = [
     ...(entryDistanceWarning
-      ? ["Entry price is very far from current price. This may be an old position or a typo."]
+      ? [t.entryDistanceWarning]
       : []),
-    ...(marketContext?.warnings ?? []),
+    ...(marketContext?.warnings ?? []).map((warning) => translateMessage(warning, t)),
   ];
 
   useEffect(() => {
@@ -226,6 +257,7 @@ export function PositionStrategyApp() {
   }, [isPositionValid, marketContext, normalizedPosition]);
 
   const strategy = strategyDecision?.spec ?? null;
+  const decisionText = strategyDecision ? getLocalizedDecisionText(strategyDecision, t) : null;
   const pnlPercentage =
     quote && normalizedPosition && isPositionValid
       ? ((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) * 100
@@ -252,63 +284,75 @@ export function PositionStrategyApp() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+    <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-7 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="flex flex-col gap-5 border-b border-slate-200 pb-5 xl:flex-row xl:items-end xl:justify-between">
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-800">
             <Activity className="h-3.5 w-3.5" />
-            CoinMarketCap Strategy Skill MVP
+            {t.badge}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-normal text-ink sm:text-4xl">
             PositionSight AI
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-            Beginner-friendly crypto position intelligence with mock CMC-ready market context,
-            visual risk levels, and backtest-ready strategy exports.
-          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{t.subtitle}</p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-soft">
+            <span className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.language}</span>
+            {(["en", "es"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setLanguage(option)}
+                className={`h-8 rounded-md px-3 text-sm font-semibold transition ${
+                  language === option ? "bg-sky-700 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                }`}
+              >
+                {languageLabels[option]}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:w-[860px] xl:grid-cols-6">
-          <MetricTile label="Current price" value={quote ? formatCurrency(quote.price, pricePrecision) : "--"} />
+        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 xl:max-w-[920px] xl:grid-cols-6">
+          <MetricTile label={t.currentPrice} value={quote ? formatCurrency(quote.price, pricePrecision) : "--"} />
           <MetricTile
-            label="24h move"
+            label={t.move24h}
             value={quote ? formatPercentage(quote.percentChange24h) : "--"}
             tone={quote && quote.percentChange24h < 0 ? "negative" : "positive"}
           />
-          <MetricTile label="Volume 24h" value={quote ? formatCompact(quote.volume24h) : "--"} />
-          <MetricTile label="Market cap" value={quote?.marketCap ? formatCompact(quote.marketCap) : "Unavailable"} />
-          <MetricTile label="Source" value={!quote || quote.source === "mock" ? "Mock data fallback" : "CMC live quote"} />
+          <MetricTile label={t.volume24h} value={quote ? formatCompact(quote.volume24h) : "--"} />
+          <MetricTile label={t.marketCap} value={quote?.marketCap ? formatCompact(quote.marketCap) : t.unavailable} />
+          <MetricTile label={t.source} value={!quote || quote.source === "mock" ? t.mockDataFallback : t.cmcLiveQuote} />
           <MetricTile
-            label="P/L"
+            label={t.pnl}
             value={quote && isPositionValid ? `${formatPercentage(pnlPercentage)} ${formatCurrency(pnlAmount)}` : "--"}
             tone={pnlAmount < 0 ? "negative" : "positive"}
           />
         </div>
       </header>
 
-      <section className="grid gap-6 lg:grid-cols-[390px_minmax(0,1fr)]">
+      <section className="grid gap-7 xl:grid-cols-[420px_minmax(0,1fr)]">
         <form className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
           <div className="flex items-center gap-2 text-lg font-semibold text-ink">
             <WalletCards className="h-5 w-5 text-sky-700" />
-            Position input
+            {t.positionInput}
           </div>
 
           <div className="mt-5 space-y-5">
             <div>
               <LabelWithInfo
-                label="Token list"
-                tooltip="Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens."
+                label={t.tokenList}
+                tooltip={t.tooltips.tokenList}
               />
               <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
-                {(["beginner", "advanced"] as const).map((mode) => (
+                  {(["beginner", "advanced"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => updateTokenMode(mode)}
-                    className={`h-9 rounded-md text-sm font-semibold capitalize transition ${
+                    className={`h-9 rounded-md text-sm font-semibold transition ${
                       tokenMode === mode ? "bg-white text-sky-800 shadow-sm" : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    {mode}
+                    {mode === "beginner" ? t.beginner : t.advanced}
                   </button>
                 ))}
               </div>
@@ -316,8 +360,8 @@ export function PositionStrategyApp() {
 
             <label className="block">
               <LabelWithInfo
-                label="Eligible token"
-                tooltip="Choose the crypto asset you want to analyze. Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens."
+                label={t.eligibleToken}
+                tooltip={t.tooltips.eligibleToken}
               />
               <select
                 value={position.symbol}
@@ -336,7 +380,10 @@ export function PositionStrategyApp() {
                       </option>
                     ))
                   : Object.entries(eligibleTokensByCategory).map(([category, tokens]) => (
-                      <optgroup key={category} label={category}>
+                      <optgroup
+                        key={category}
+                        label={t.tokenCategoryLabels[category as TokenCategory]}
+                      >
                         {tokens.map((token) => (
                           <option key={token.id} value={token.symbol}>
                             {token.symbol} - {token.name}
@@ -349,8 +396,8 @@ export function PositionStrategyApp() {
 
             <label className="block">
               <LabelWithInfo
-                label="Entry price"
-                tooltip="The price where you bought, or the price where you are considering entering."
+                label={t.entryPrice}
+                tooltip={t.tooltips.entryPrice}
               />
               <input
                 type="text"
@@ -363,8 +410,8 @@ export function PositionStrategyApp() {
 
             <label className="block">
               <LabelWithInfo
-                label="Position size"
-                tooltip="How many tokens or coins you hold or plan to buy. This is used to estimate risk."
+                label={t.positionSize}
+                tooltip={t.tooltips.positionSize}
               />
               <input
                 type="text"
@@ -377,22 +424,29 @@ export function PositionStrategyApp() {
 
             <div>
               <LabelWithInfo
-                label="Timeframe"
-                tooltip="The chart context used for the strategy. Higher timeframes like 4h or 1d are usually more stable than 15m."
+                label={t.strategyTimeframe}
+                tooltip={t.tooltips.strategyTimeframe}
               />
-              <div className="mt-2 grid grid-cols-4 gap-2">
-                {timeframes.map((timeframe) => (
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {strategyTimeframes.map((strategyTimeframe: StrategyTimeframe) => (
                   <button
-                    key={timeframe}
+                    key={strategyTimeframe}
                     type="button"
-                    onClick={() => setPosition((current) => ({ ...current, timeframe }))}
+                    onClick={() =>
+                      setPosition((current) => ({
+                        ...current,
+                        strategyTimeframe,
+                        timeframeCategory: getTimeframeCategory(strategyTimeframe),
+                        analysisInterval: strategyTimeframe,
+                      }))
+                    }
                     className={`h-10 rounded-md border text-sm font-semibold transition ${
-                      position.timeframe === timeframe
+                      position.strategyTimeframe === strategyTimeframe
                         ? "border-sky-700 bg-sky-700 text-white"
                         : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
                     }`}
                   >
-                    {timeframe}
+                    {t.timeframeLabels[strategyTimeframe]}
                   </button>
                 ))}
               </div>
@@ -400,23 +454,59 @@ export function PositionStrategyApp() {
 
             <div>
               <LabelWithInfo
-                label="Strategy mode"
-                tooltip="Auto lets PositionSight choose the most appropriate strategy. Manual mode lets you test a specific strategy and see whether it fits."
+                label={t.strategyMode}
+                tooltip={t.tooltips.strategyMode}
               />
-              <div className="mt-2 grid gap-2">
+              <p className="mt-2 text-xs leading-5 text-slate-500">{t.strategyPrinciples}</p>
+              <div className="mt-3 grid gap-2">
                 {strategyModes.map((mode) => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    onClick={() => setPosition((current) => ({ ...current, strategyMode: mode.value }))}
-                    className={`min-h-10 rounded-md border px-3 py-2 text-left text-sm font-semibold transition ${
-                      (position.strategyMode ?? "auto") === mode.value
-                        ? "border-sky-700 bg-sky-50 text-sky-800"
-                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
+                  <div key={mode} className="rounded-md border border-slate-200 bg-white">
+                    <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        onClick={() => setPosition((current) => ({ ...current, strategyMode: mode }))}
+                        className={`min-h-10 flex-1 rounded-l-md px-3 py-2 text-left text-sm font-semibold transition ${
+                          (position.strategyMode ?? "auto") === mode
+                            ? "bg-sky-50 text-sky-800"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {t.strategyModeLabels[mode]}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStrategyMode((current) => (current === mode ? null : mode))}
+                        className="inline-flex w-28 items-center justify-center border-l border-slate-200 px-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                        aria-expanded={expandedStrategyMode === mode}
+                      >
+                        {expandedStrategyMode === mode ? t.hideExplanation : t.whatIsThis}
+                      </button>
+                    </div>
+                    {expandedStrategyMode === mode ? (
+                      <div className="border-t border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                        <div>
+                          <span className="font-semibold text-slate-950">{t.simpleExplanation}:</span>{" "}
+                          {t.strategyExplanations[mode].simple}
+                        </div>
+                        <div className="mt-2">
+                          <span className="font-semibold text-slate-950">{t.bestUsedWhen}:</span>{" "}
+                          {t.strategyExplanations[mode].bestUsedWhen}
+                        </div>
+                        <div className="mt-2">
+                          <span className="font-semibold text-slate-950">{t.avoidWhen}:</span>{" "}
+                          {t.strategyExplanations[mode].avoidWhen}
+                        </div>
+                        <div className="mt-2">
+                          <span className="font-semibold text-slate-950">{t.systemChecks}:</span>{" "}
+                          {t.strategyExplanations[mode].checks}
+                        </div>
+                        <div className="mt-2">
+                          <span className="font-semibold text-slate-950">{t.beginnerNote}</span>{" "}
+                          {t.strategyExplanations[mode].beginnerNote}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             </div>
@@ -424,8 +514,8 @@ export function PositionStrategyApp() {
             <label className="block">
               <span className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
                 <span className="inline-flex items-center gap-1.5">
-                  <span>Max risk percentage</span>
-                  <InfoTooltip text="The maximum percentage of the entry price you are willing to risk if the setup fails." />
+                  <span>{t.maxRiskPercentage}</span>
+                  <InfoTooltip text={t.tooltips.maxRiskPercentage} />
                 </span>
                 <span className="font-semibold text-slate-950">{position.maxRiskPercentage}%</span>
               </span>
@@ -444,7 +534,7 @@ export function PositionStrategyApp() {
                 className="mt-3 w-full accent-sky-700"
               />
               <span className="mt-1 block text-xs text-slate-500">
-                Demo range: {minRiskPercentage}% to {maxRiskPercentage}% per strategy.
+                {t.demoRange}: {minRiskPercentage}% {t.and} {maxRiskPercentage}% {t.perStrategy}
               </span>
             </label>
           </div>
@@ -454,7 +544,7 @@ export function PositionStrategyApp() {
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <div className="font-semibold">Check position inputs</div>
+                  <div className="font-semibold">{t.checkInputs}</div>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {validationMessages.map((message, index) => (
                       <li key={`${message}-${index}`}>{message}</li>
@@ -470,7 +560,7 @@ export function PositionStrategyApp() {
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <div className="font-semibold">Position warning</div>
+                  <div className="font-semibold">{t.positionWarning}</div>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {warningMessages.map((message, index) => (
                       <li key={`${message}-${index}`}>{message}</li>
@@ -484,7 +574,7 @@ export function PositionStrategyApp() {
           <div className="mt-5 rounded-md border border-slate-200 bg-panel p-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-900">{selectedToken.name}</div>
             <div className="mt-1">
-              Category: {selectedToken.category}. Current MVP uses mock/proxy context for demo reliability.
+              {t.tokenCategory}: {t.tokenCategoryLabels[selectedToken.category]}. {t.tokenCategoryNote}
             </div>
           </div>
         </form>
@@ -494,33 +584,38 @@ export function PositionStrategyApp() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-lg font-semibold text-ink">
                 <BarChart3 className="h-5 w-5 text-positive" />
-                Entry vs current price
+                {t.entryVsCurrentPrice}
               </div>
               <div className="text-sm text-slate-500">
-                {isLoadingContext ? "Loading market context..." : contextError ?? "Market context ready"}
+                {isLoadingContext ? t.loadingMarketContext : contextError ?? t.marketContextReady}
               </div>
             </div>
 
             {quote && strategy ? (
               <>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <MetricTile label="Current price" value={formatCurrency(quote.price, pricePrecision)} />
+                  <MetricTile label={t.currentPrice} value={formatCurrency(quote.price, pricePrecision)} />
                   <MetricTile
-                    label="Entry price"
+                    label={t.entryPrice}
                     value={normalizedPosition ? formatCurrency(normalizedPosition.entryPrice, pricePrecision) : "--"}
                   />
-                  <MetricTile label="Position value" value={formatCurrency(positionValue)} />
-                  <MetricTile label="Market cap" value={quote.marketCap ? formatCompact(quote.marketCap) : "Unavailable"} />
+                  <MetricTile label={t.positionValue} value={formatCurrency(positionValue)} />
+                  <MetricTile label={t.marketCap} value={quote.marketCap ? formatCompact(quote.marketCap) : t.unavailable} />
                 </div>
                 <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 p-3">
                   {normalizedPosition ? (
-                    <PricePositionChart position={normalizedPosition} quote={quote} strategy={strategy} />
+                    <PricePositionChart
+                      position={normalizedPosition}
+                      quote={quote}
+                      strategy={strategy}
+                      language={language}
+                    />
                   ) : null}
                 </div>
               </>
             ) : (
               <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                {contextError ?? validationMessages[0] ?? "Loading mock market context."}
+                {contextError ? translateMessage(contextError, t) : validationMessages[0] ?? t.loadingMockMarketContext}
               </div>
             )}
           </section>
@@ -528,27 +623,30 @@ export function PositionStrategyApp() {
           {marketContext ? (
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-lg font-semibold text-ink">Market context</div>
+                <div className="text-lg font-semibold text-ink">{t.marketContext}</div>
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
                   {marketContext.source === "coinmarketcap"
-                    ? "CoinMarketCap live quote; proxy context fields"
-                    : "Mock data fallback"}
+                    ? t.estimatedContextFields
+                    : t.mockDataFallback}
                 </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <MetricTile label="Trend" value={marketContext.technicals.trendState} />
+                <MetricTile label={t.trend} value={t.trendStateLabels[marketContext.technicals.trendState]} />
                 <MetricTile label="RSI 14" value={marketContext.technicals.rsi14.toFixed(0)} />
                 <MetricTile label="ATR 14" value={formatCurrency(marketContext.technicals.atr14, pricePrecision)} />
-                <MetricTile label="Sentiment" value={`${marketContext.sentiment.label} (${marketContext.sentiment.score})`} />
-                <MetricTile label="Liquidity" value={`${marketContext.orderBook.liquidityScore}/100`} />
-                <MetricTile label="Derivatives" value={marketContext.derivatives.longShortBias} />
+                <MetricTile
+                  label={t.sentiment}
+                  value={`${t.sentimentLabels[marketContext.sentiment.label]} (${marketContext.sentiment.score})`}
+                />
+                <MetricTile label={t.liquidity} value={`${marketContext.orderBook.liquidityScore}/100`} />
+                <MetricTile label={t.derivatives} value={t.derivativesLabels[marketContext.derivatives.longShortBias]} />
               </div>
               {marketContext.warnings?.length ? (
                 <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-                  <div className="font-semibold">Data note</div>
+                  <div className="font-semibold">{t.dataNote}</div>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {marketContext.warnings.map((warning, index) => (
-                      <li key={`${warning}-${index}`}>{warning}</li>
+                      <li key={`${warning}-${index}`}>{translateMessage(warning, t)}</li>
                     ))}
                   </ul>
                 </div>
@@ -557,51 +655,60 @@ export function PositionStrategyApp() {
           ) : null}
 
           {strategyDecision && strategy && quote ? (
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+            <section className="grid gap-7 2xl:grid-cols-[minmax(420px,0.86fr)_minmax(0,1.14fr)]">
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
                 <div className="flex items-center gap-2 text-lg font-semibold text-ink">
                   <ShieldCheck className="h-5 w-5 text-sky-700" />
-                  Strategy signal
+                  {t.strategySignal}
                 </div>
                 <div className="mt-4 rounded-md border border-slate-200 bg-panel p-4">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Strategy type
+                    {t.strategyEvaluated}
                   </div>
                   <div className="mt-1 text-xl font-semibold text-slate-950">
-                    {getStrategyLabel(strategy.strategyType)}
+                    {t.strategyTypeLabels[strategyDecision.evaluatedStrategyType]}
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <MetricTile label="Fit" value={strategyDecision.fit} tone={getFitTone(strategyDecision.fit)} />
-                  <MetricTile label="Selected by" value={strategyDecision.selectedBy === "auto" ? "Auto" : "User"} />
-                  <MetricTile label="Estimated risk" value={formatCurrency(strategy.riskRules.estimatedRiskAmount)} />
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
                   <MetricTile
-                    label="Data source"
-                    value={strategy.dataUsed.source === "mock" ? "Mock data fallback" : "CoinMarketCap live quote"}
+                    label={t.riskVerdict}
+                    value={t.riskVerdictLabels[strategyDecision.finalRiskVerdict]}
+                    tone={getRiskVerdictTone(strategyDecision.finalRiskVerdict)}
+                  />
+                  <MetricTile
+                    label={t.fit}
+                    value={t.fitLabels[strategyDecision.fit]}
+                    tone={getFitTone(strategyDecision.fit)}
+                  />
+                  <MetricTile label={t.selectedBy} value={strategyDecision.selectedBy === "auto" ? t.auto : t.user} />
+                  <MetricTile label={t.estimatedRisk} value={formatCurrency(strategy.riskRules.estimatedRiskAmount)} />
+                  <MetricTile
+                    label={t.dataSource}
+                    value={strategy.dataUsed.source === "mock" ? t.mockDataFallback : t.coinMarketCapLiveQuote}
                   />
                 </div>
 
                 <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
-                  <div className="font-semibold text-slate-950">Why this strategy?</div>
-                  <p className="mt-1">{strategyDecision.whyThisStrategy}</p>
+                  <div className="font-semibold text-slate-950">{t.whyThisStrategy}</div>
+                  <p className="mt-1">{decisionText?.whyThisStrategy}</p>
                   <p className="mt-3">
-                    <span className="font-semibold text-slate-950">Next confirmation:</span>{" "}
-                    {strategyDecision.nextConfirmation}
+                    <span className="font-semibold text-slate-950">{t.nextConfirmation}</span>{" "}
+                    {decisionText?.nextConfirmation}
                   </p>
                   <p className="mt-3">
-                    <span className="font-semibold text-slate-950">Beginner note:</span>{" "}
-                    {strategyDecision.beginnerExplanation}
+                    <span className="font-semibold text-slate-950">{t.beginnerNote}</span>{" "}
+                    {decisionText?.beginnerExplanation}
                   </p>
                 </div>
 
-                {strategy.riskRules.noTradeReason ? (
+                {strategyDecision.noTradeReason ? (
                   <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
-                        <div className="font-semibold">No-trade reason</div>
-                        <div>{strategy.riskRules.noTradeReason}</div>
+                        <div className="font-semibold">{t.noTradeReason}</div>
+                        <div>{translateMessage(strategyDecision.noTradeReason, t)}</div>
                       </div>
                     </div>
                   </div>
@@ -609,18 +716,18 @@ export function PositionStrategyApp() {
 
                 {strategyDecision.warnings.length > 0 ? (
                   <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                    <div className="font-semibold">Warnings</div>
+                    <div className="font-semibold">{t.warnings}</div>
                     <ul className="mt-1 list-disc space-y-1 pl-4">
                       {strategyDecision.warnings.map((warning) => (
-                        <li key={warning}>{warning}</li>
+                        <li key={warning}>{translateMessage(warning, t)}</li>
                       ))}
                     </ul>
                   </div>
                 ) : null}
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <MetricTile label="Stop loss" value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />
-                  <MetricTile label="Take profit" value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
+                  <MetricTile label={t.stopLoss} value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />
+                  <MetricTile label={t.takeProfit} value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
                 </div>
               </div>
 
@@ -628,7 +735,7 @@ export function PositionStrategyApp() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 text-lg font-semibold text-ink">
                     <Braces className="h-5 w-5 text-slate-700" />
-                    Backtest-ready JSON
+                    {t.backtestReadyJson}
                   </div>
                   <button
                     type="button"
@@ -638,17 +745,17 @@ export function PositionStrategyApp() {
                       const url = URL.createObjectURL(blob);
                       const anchor = document.createElement("a");
                       anchor.href = url;
-                      anchor.download = `positionsight-${position.symbol}-${position.timeframe}-${strategy.strategyType}.json`;
+                      anchor.download = `positionsight-${position.symbol}-${position.strategyTimeframe}-${strategy.strategyType}.json`;
                       anchor.click();
                       URL.revokeObjectURL(url);
                     }}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Download className="h-4 w-4" />
-                    Export JSON
+                    {t.exportJson}
                   </button>
                 </div>
-                <pre className="mt-4 max-h-[520px] overflow-auto rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
+                <pre className="mt-4 max-h-[640px] overflow-auto rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
                   {strategyJson}
                 </pre>
               </div>
