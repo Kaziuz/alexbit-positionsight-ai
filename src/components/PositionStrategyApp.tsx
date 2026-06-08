@@ -22,6 +22,7 @@ import type {
   MarketContext,
   MarketQuote,
   HistoryResponse,
+  PositionIntent,
   PositionInput,
   RiskVerdict,
   StrategyDecision,
@@ -39,6 +40,7 @@ const defaultTotalCapital = 1000;
 const atrStopMultiple = 1.75;
 
 const strategyModes: StrategyMode[] = ["auto", "trend_confirmation", "breakout_retest", "defensive_rebound", "risk_check"];
+const positionIntents: PositionIntent[] = ["analyze_entry", "manage_open_position", "exit_review"];
 
 const initialPosition: PositionInput = {
   symbol: "AVAX",
@@ -49,6 +51,7 @@ const initialPosition: PositionInput = {
   timeframeCategory: "daily",
   analysisInterval: "1d",
   maxRiskPercentage: recommendedRiskPercentage,
+  positionIntent: "analyze_entry",
   strategyMode: "auto",
 };
 
@@ -104,7 +107,7 @@ function translateMessage(message: string | undefined, t: TranslationSet) {
 
 function getLocalizedDecisionText(decision: StrategyDecision, t: TranslationSet) {
   const evaluatedLabel = t.strategyTypeLabels[decision.evaluatedStrategyType];
-  const whyThisStrategy =
+  const baseWhyThisStrategy =
     decision.selectedBy === "auto"
       ? `${t.decisionCopy.autoWhy} ${evaluatedLabel}.`
       : decision.noTradeRecommended
@@ -112,11 +115,18 @@ function getLocalizedDecisionText(decision: StrategyDecision, t: TranslationSet)
         : decision.fit === "good"
           ? t.decisionCopy.manualGood
           : t.decisionCopy.manualCaution;
+  const intentCopy = t.intentDecisionCopy[decision.positionIntent];
 
   return {
-    whyThisStrategy,
-    nextConfirmation: t.nextConfirmationMessages[decision.evaluatedStrategyType],
-    beginnerExplanation: t.beginnerVerdictMessages[decision.finalRiskVerdict],
+    whyThisStrategy: `${intentCopy.prefix} ${baseWhyThisStrategy}`,
+    nextConfirmation:
+      translateMessage(decision.nextConfirmation, t) ||
+      intentCopy.nextConfirmation ||
+      t.nextConfirmationMessages[decision.evaluatedStrategyType],
+    beginnerExplanation:
+      translateMessage(decision.beginnerExplanation, t) ||
+      intentCopy.beginnerExplanation ||
+      t.beginnerVerdictMessages[decision.finalRiskVerdict],
   };
 }
 
@@ -182,6 +192,7 @@ export function PositionStrategyApp() {
   const [position, setPosition] = useState<PositionInput>(initialPosition);
   const [entryPriceInput, setEntryPriceInput] = useState(String(initialPosition.entryPrice));
   const [totalCapitalInput, setTotalCapitalInput] = useState(String(initialPosition.totalCapital));
+  const [existingPositionSizeInput, setExistingPositionSizeInput] = useState("2");
   const [tokenMode, setTokenMode] = useState<"beginner" | "advanced">("beginner");
   const [language, setLanguage] = useState<Language>("en");
   const [expandedStrategyMode, setExpandedStrategyMode] = useState<StrategyMode | null>("auto");
@@ -226,6 +237,11 @@ export function PositionStrategyApp() {
   const quote = analysisContext ? getQuoteFromContext(analysisContext) : null;
   const parsedEntryPrice = useMemo(() => parseLocalizedNumberInput(entryPriceInput), [entryPriceInput]);
   const parsedTotalCapital = useMemo(() => parseLocalizedNumberInput(totalCapitalInput), [totalCapitalInput]);
+  const parsedExistingPositionSize = useMemo(
+    () => parseLocalizedNumberInput(existingPositionSizeInput),
+    [existingPositionSizeInput],
+  );
+  const isEntryIntent = position.positionIntent === "analyze_entry";
   const positionSizing = useMemo(() => {
     if (!parsedEntryPrice.ok || parsedEntryPrice.value <= 0 || !parsedTotalCapital.ok || parsedTotalCapital.value <= 0) {
       return {
@@ -295,13 +311,23 @@ export function PositionStrategyApp() {
       return null;
     }
 
+    if (!isEntryIntent && (!parsedExistingPositionSize.ok || parsedExistingPositionSize.value <= 0)) {
+      return null;
+    }
+
+    const normalizedPositionSize = isEntryIntent
+      ? positionSizing.positionSize
+      : parsedExistingPositionSize.ok
+        ? parsedExistingPositionSize.value
+        : 0;
+
     return {
       ...position,
       entryPrice: parsedEntryPrice.value,
-      positionSize: positionSizing.positionSize,
+      positionSize: normalizedPositionSize,
       totalCapital: parsedTotalCapital.value,
     };
-  }, [parsedEntryPrice, parsedTotalCapital, position, positionSizing.positionSize]);
+  }, [isEntryIntent, parsedEntryPrice, parsedExistingPositionSize, parsedTotalCapital, position, positionSizing.positionSize]);
 
   const validationMessages = useMemo(() => {
     const messages: string[] = [];
@@ -318,8 +344,16 @@ export function PositionStrategyApp() {
       messages.push(t.totalCapitalGreaterThanZero);
     }
 
-    if (positionSizing.positionSize <= 0) {
+    if (isEntryIntent && positionSizing.positionSize <= 0) {
       messages.push(t.calculatedPositionSizeUnavailable);
+    }
+
+    if (!isEntryIntent) {
+      if (!parsedExistingPositionSize.ok) {
+        messages.push(existingPositionSizeInput.trim() ? t.useValidDecimals : t.positionSizeGreaterThanZero);
+      } else if (parsedExistingPositionSize.value <= 0) {
+        messages.push(t.positionSizeGreaterThanZero);
+      }
     }
 
     if (
@@ -331,12 +365,27 @@ export function PositionStrategyApp() {
     }
 
     return messages;
-  }, [entryPriceInput, parsedEntryPrice, parsedTotalCapital, position.maxRiskPercentage, positionSizing.positionSize, t, totalCapitalInput]);
+  }, [
+    entryPriceInput,
+    existingPositionSizeInput,
+    isEntryIntent,
+    parsedEntryPrice,
+    parsedExistingPositionSize,
+    parsedTotalCapital,
+    position.maxRiskPercentage,
+    positionSizing.positionSize,
+    t,
+    totalCapitalInput,
+  ]);
   const isPositionValid = validationMessages.length === 0;
   const entryDistanceWarning =
     quote && normalizedPosition
       ? Math.abs((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) > 0.5
       : false;
+  const stopBreachWarning =
+    quote && !isEntryIntent && positionSizing.stopLoss > 0 && quote.price <= positionSizing.stopLoss
+      ? t.stopBreachWarning
+      : null;
   const genericSourceNotes = new Set<string>([
     String(t.latestLiveHistoryEstimated),
     String(translateMessage(
@@ -348,6 +397,7 @@ export function PositionStrategyApp() {
     ...(entryDistanceWarning
       ? [t.entryDistanceWarning]
       : []),
+    ...(stopBreachWarning ? [stopBreachWarning] : []),
     ...(getTimeframeCategory(position.strategyTimeframe) === "intraday" ? [t.intradayTradingWarning] : []),
     ...(position.maxRiskPercentage > recommendedRiskPercentage ? [t.riskAboveOneWarning] : []),
     ...positionSizing.warnings,
@@ -524,6 +574,18 @@ export function PositionStrategyApp() {
           },
         ]
       : [];
+  const entryPriceLabel = t.intentEntryPriceLabels[position.positionIntent];
+  const entryPriceTooltip = t.intentEntryPriceTooltips[position.positionIntent];
+  const positionSizeLabel = isEntryIntent ? t.calculatedPositionSize : t.currentPositionSize;
+  const positionSizeTooltip = isEntryIntent ? t.tooltips.calculatedPositionSize : t.tooltips.currentPositionSize;
+  const positionSizeHelper = isEntryIntent ? t.calculatedPositionSizeHelper : t.currentPositionSizeHelper;
+  const positionSizeValue = isEntryIntent
+    ? formatCalculatedSize(positionSizing.positionSize)
+    : existingPositionSizeInput;
+  const positionRiskAmount =
+    normalizedPosition && positionSizing.stopDistance > 0
+      ? Math.abs(positionSizing.stopDistance * normalizedPosition.positionSize)
+      : 0;
 
   function updateTokenMode(nextMode: "beginner" | "advanced") {
     setTokenMode(nextMode);
@@ -656,10 +718,33 @@ export function PositionStrategyApp() {
               </select>
             </label>
 
+            <div>
+              <LabelWithInfo
+                label={t.positionIntent}
+                tooltip={t.tooltips.positionIntent}
+              />
+              <div className="mt-2 grid gap-2">
+                {positionIntents.map((intent) => (
+                  <button
+                    key={intent}
+                    type="button"
+                    onClick={() => setPosition((current) => ({ ...current, positionIntent: intent }))}
+                    className={`min-h-10 rounded-md border px-3 py-2 text-left text-sm font-semibold transition ${
+                      position.positionIntent === intent
+                        ? "border-sky-700 bg-sky-700 text-white"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                    }`}
+                  >
+                    {t.positionIntentLabels[intent]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <label className="block">
               <LabelWithInfo
-                label={t.entryPrice}
-                tooltip={t.tooltips.entryPrice}
+                label={entryPriceLabel}
+                tooltip={entryPriceTooltip}
               />
               <input
                 type="text"
@@ -686,18 +771,29 @@ export function PositionStrategyApp() {
 
             <label className="block">
               <LabelWithInfo
-                label={t.calculatedPositionSize}
-                tooltip={t.tooltips.calculatedPositionSize}
+                label={positionSizeLabel}
+                tooltip={positionSizeTooltip}
               />
               <input
                 type="text"
-                value={formatCalculatedSize(positionSizing.positionSize)}
-                readOnly
-                className="mt-1 h-11 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-950 outline-none"
+                inputMode="decimal"
+                value={positionSizeValue}
+                readOnly={isEntryIntent}
+                onChange={(event) => setExistingPositionSizeInput(event.target.value)}
+                className={`mt-1 h-11 w-full rounded-md border px-3 text-sm font-semibold text-slate-950 outline-none transition ${
+                  isEntryIntent
+                    ? "border-slate-200 bg-slate-50"
+                    : "border-slate-300 bg-white focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                }`}
               />
               <span className="mt-1 block text-xs leading-5 text-slate-500">
-                {t.calculatedPositionSizeHelper}
+                {positionSizeHelper}
               </span>
+              {!isEntryIntent ? (
+                <span className="mt-1 block text-xs leading-5 text-slate-500">
+                  {t.existingPositionRisk}: {formatCurrency(positionRiskAmount)}
+                </span>
+              ) : null}
             </label>
 
             <div>
@@ -874,7 +970,7 @@ export function PositionStrategyApp() {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <MetricTile label={t.currentPrice} value={formatCurrency(quote.price, pricePrecision)} />
                   <MetricTile
-                    label={t.entryPrice}
+                    label={entryPriceLabel}
                     value={normalizedPosition ? formatCurrency(normalizedPosition.entryPrice, pricePrecision) : "--"}
                   />
                   <MetricTile label={t.positionValue} value={formatCurrency(positionValue)} />
@@ -956,6 +1052,20 @@ export function PositionStrategyApp() {
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
                   <MetricTile
+                    label={t.positionIntent}
+                    value={t.positionIntentLabels[strategyDecision.positionIntent]}
+                  />
+                  <MetricTile
+                    label={t.intentAction}
+                    value={t.intentActionLabels[strategyDecision.intentAction]}
+                    tone={strategyDecision.shouldExitPosition || strategyDecision.shouldReduceExposure ? "warning" : "positive"}
+                  />
+                  <MetricTile
+                    label={t.stopStatus}
+                    value={t.stopStatusLabels[strategyDecision.stopStatus]}
+                    tone={strategyDecision.stopStatus === "stop_breached" ? "negative" : strategyDecision.stopStatus === "near_stop" ? "warning" : "positive"}
+                  />
+                  <MetricTile
                     label={t.riskVerdict}
                     value={t.riskVerdictLabels[strategyDecision.finalRiskVerdict]}
                     tone={getRiskVerdictTone(strategyDecision.finalRiskVerdict)}
@@ -968,6 +1078,16 @@ export function PositionStrategyApp() {
                   <MetricTile label={t.selectedBy} value={strategyDecision.selectedBy === "auto" ? t.auto : t.user} />
                   <MetricTile label={t.estimatedRisk} value={formatCurrency(strategy.riskRules.estimatedRiskAmount)} />
                   <MetricTile
+                    label={t.addExposureAllowed}
+                    value={strategyDecision.shouldAddExposure ? t.yes : t.no}
+                    tone={strategyDecision.shouldAddExposure ? "positive" : "warning"}
+                  />
+                  <MetricTile
+                    label={t.reduceOrExitRecommended}
+                    value={strategyDecision.shouldReduceExposure || strategyDecision.shouldExitPosition ? t.yes : t.no}
+                    tone={strategyDecision.shouldReduceExposure || strategyDecision.shouldExitPosition ? "negative" : "positive"}
+                  />
+                  <MetricTile
                     label={t.dataSource}
                     value={strategy.dataUsed.source === "mock" ? t.mockDataFallback : t.coinMarketCapLiveQuote}
                   />
@@ -976,6 +1096,16 @@ export function PositionStrategyApp() {
                 <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
                   <div className="font-semibold text-slate-950">{t.whyThisStrategy}</div>
                   <p className="mt-1">{decisionText?.whyThisStrategy}</p>
+                  <p className="mt-3">
+                    <span className="font-semibold text-slate-950">{t.suggestedAction}</span>{" "}
+                    {t.intentSuggestedActionLabels[strategyDecision.intentAction]}
+                  </p>
+                  <p className="mt-3">
+                    <span className="font-semibold text-slate-950">
+                      {strategyDecision.positionIntent === "analyze_entry" ? t.entryCondition : t.decisionCondition}
+                    </span>{" "}
+                    {translateMessage(strategyDecision.decisionCondition, t) || strategy.entryCondition}
+                  </p>
                   <p className="mt-3">
                     <span className="font-semibold text-slate-950">{t.nextConfirmation}</span>{" "}
                     {decisionText?.nextConfirmation}

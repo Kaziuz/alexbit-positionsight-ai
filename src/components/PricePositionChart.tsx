@@ -53,6 +53,30 @@ type ChartLabels = {
   source: string;
   estimatedProjection: string;
   estimatedPath: string;
+  meaning: string;
+  meanings: {
+    entry: string;
+    current: string;
+    stop: string;
+    takeProfit: string;
+    estimatedPath: string;
+  };
+  intentMeanings: Record<
+    PositionInput["positionIntent"],
+    {
+      entry: string;
+      current: string;
+      stop: string;
+      takeProfit: string;
+      estimatedPath: string;
+    }
+  >;
+  sourceLabels: {
+    userInput: string;
+    coinMarketCapLiveQuote: string;
+    strategyEngine: string;
+    estimatedStrategyPath: string;
+  };
   pointType: string;
   pointTypes: Record<ChartPointType, string>;
   sources: Record<"coinmarketcap" | "estimated", string>;
@@ -150,6 +174,9 @@ function getProjectionData(
   );
 
   const midpoint = (position.entryPrice + quote.price) / 2;
+  const stopBreached = quote.price <= strategy.stopLoss;
+  const isManaging = position.positionIntent === "manage_open_position";
+  const isExitReview = position.positionIntent === "exit_review";
   const makePoint = (
     timeframe: StrategyTimeframe,
     index: number,
@@ -168,49 +195,67 @@ function getProjectionData(
     markerRole,
   });
 
+  function getIntentPrices(timeframe: StrategyTimeframe, noiseMultiplier: number, forwardMultiplier: number) {
+    if (isExitReview) {
+      const decisionReference = stopBreached ? Math.min(quote.price, strategy.stopLoss * 0.98) : quote.price;
+
+      return [
+        makePoint(timeframe, 0, position.entryPrice, "historical_estimate", "entry"),
+        makePoint(timeframe, 1, midpoint, "historical_estimate"),
+        makePoint(timeframe, 2, decisionReference, "live_quote", "current"),
+        makePoint(
+          timeframe,
+          3,
+          stopBreached ? decisionReference - baseRange * 0.08 : Math.max(strategy.stopLoss, quote.price - baseRange * 0.18),
+          "strategy_projection",
+        ),
+        makePoint(
+          timeframe,
+          4,
+          stopBreached ? decisionReference : Math.max(quote.price, strategy.takeProfit),
+          "strategy_projection",
+          "takeProfit",
+        ),
+      ];
+    }
+
+    if (isManaging) {
+      return [
+        makePoint(timeframe, 0, position.entryPrice, "historical_estimate", "entry"),
+        makePoint(timeframe, 1, stopBreached ? strategy.stopLoss : midpoint, "historical_estimate"),
+        makePoint(timeframe, 2, quote.price, "live_quote", "current"),
+        makePoint(
+          timeframe,
+          3,
+          stopBreached ? quote.price - baseRange * 0.05 : quote.price + baseRange * forwardMultiplier,
+          "strategy_projection",
+        ),
+        makePoint(
+          timeframe,
+          4,
+          stopBreached ? quote.price : strategy.takeProfit,
+          "strategy_projection",
+          "takeProfit",
+        ),
+      ];
+    }
+
+    return [
+      makePoint(timeframe, 0, position.entryPrice, "historical_estimate", "entry"),
+      makePoint(timeframe, 1, midpoint - baseRange * noiseMultiplier, "historical_estimate"),
+      makePoint(timeframe, 2, quote.price, "live_quote", "current"),
+      makePoint(timeframe, 3, quote.price + baseRange * forwardMultiplier, "strategy_projection"),
+      makePoint(timeframe, 4, strategy.takeProfit, "strategy_projection", "takeProfit"),
+    ];
+  }
+
   const projectionByTimeframe = {
-    "15m": [
-      makePoint("15m", 0, position.entryPrice, "historical_estimate", "entry"),
-      makePoint("15m", 1, position.entryPrice - baseRange * 0.45, "historical_estimate"),
-      makePoint("15m", 2, quote.price, "live_quote", "current"),
-      makePoint("15m", 3, quote.price + baseRange * 0.36, "strategy_projection"),
-      makePoint("15m", 4, quote.price - baseRange * 0.22, "strategy_projection"),
-    ],
-    "30m": [
-      makePoint("30m", 0, position.entryPrice, "historical_estimate", "entry"),
-      makePoint("30m", 1, midpoint - baseRange * 0.28, "historical_estimate"),
-      makePoint("30m", 2, quote.price, "live_quote", "current"),
-      makePoint("30m", 3, quote.price + baseRange * 0.25, "strategy_projection"),
-      makePoint("30m", 4, strategy.takeProfit, "strategy_projection", "takeProfit"),
-    ],
-    "1h": [
-      makePoint("1h", 0, position.entryPrice, "historical_estimate", "entry"),
-      makePoint("1h", 1, midpoint - baseRange * 0.16, "historical_estimate"),
-      makePoint("1h", 2, quote.price, "live_quote", "current"),
-      makePoint("1h", 3, quote.price + baseRange * 0.18, "strategy_projection"),
-      makePoint("1h", 4, strategy.takeProfit, "strategy_projection", "takeProfit"),
-    ],
-    "1d": [
-      makePoint("1d", 0, position.entryPrice, "historical_estimate", "entry"),
-      makePoint("1d", 1, midpoint, "historical_estimate"),
-      makePoint("1d", 2, quote.price, "live_quote", "current"),
-      makePoint("1d", 3, quote.price + baseRange * 0.12, "strategy_projection"),
-      makePoint("1d", 4, strategy.takeProfit, "strategy_projection", "takeProfit"),
-    ],
-    "1w": [
-      makePoint("1w", 0, position.entryPrice, "historical_estimate", "entry"),
-      makePoint("1w", 1, midpoint, "historical_estimate"),
-      makePoint("1w", 2, quote.price, "live_quote", "current"),
-      makePoint("1w", 3, quote.price + baseRange * 0.18, "strategy_projection"),
-      makePoint("1w", 4, strategy.takeProfit, "strategy_projection", "takeProfit"),
-    ],
-    "1mo": [
-      makePoint("1mo", 0, position.entryPrice, "historical_estimate", "entry"),
-      makePoint("1mo", 1, midpoint, "historical_estimate"),
-      makePoint("1mo", 2, quote.price, "live_quote", "current"),
-      makePoint("1mo", 3, quote.price + baseRange * 0.24, "strategy_projection"),
-      makePoint("1mo", 4, strategy.takeProfit, "strategy_projection", "takeProfit"),
-    ],
+    "15m": getIntentPrices("15m", 0.45, 0.36),
+    "30m": getIntentPrices("30m", 0.28, 0.25),
+    "1h": getIntentPrices("1h", 0.16, 0.18),
+    "1d": getIntentPrices("1d", 0, 0.12),
+    "1w": getIntentPrices("1w", 0, 0.18),
+    "1mo": getIntentPrices("1mo", 0, 0.24),
   } satisfies Record<PositionInput["strategyTimeframe"], ProjectionPoint[]>;
 
   return projectionByTimeframe[position.strategyTimeframe];
@@ -247,6 +292,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
   const [localTimeZone, setLocalTimeZone] = useState(fallbackTimeZone);
   const t = translations[language];
   const chartLabels = t.chartLabels;
+  const intentMeanings = chartLabels.intentMeanings[position.positionIntent];
   const pricePrecision = quote.price < 1 ? 6 : 2;
   const baseDate = useMemo(() => getBaseDate(quote.lastUpdated), [quote.lastUpdated]);
   const currentX = baseDate.getTime();
@@ -287,7 +333,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
       className: "border-red-200 bg-red-50 text-red-700",
       markerX: markerPositions.stop,
       source: chartLabels.sourceLabels.strategyEngine,
-      meaning: chartLabels.meanings.stop,
+      meaning: intentMeanings.stop,
     },
     {
       key: "entry",
@@ -297,7 +343,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
       className: "border-blue-200 bg-blue-50 text-blue-700",
       markerX: markerPositions.entry,
       source: chartLabels.sourceLabels.userInput,
-      meaning: chartLabels.meanings.entry,
+      meaning: intentMeanings.entry,
     },
     {
       key: "current",
@@ -307,7 +353,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
       className: "border-orange-200 bg-orange-50 text-orange-700",
       markerX: markerPositions.current,
       source: chartLabels.sourceLabels.coinMarketCapLiveQuote,
-      meaning: chartLabels.meanings.current,
+      meaning: intentMeanings.current,
     },
     {
       key: "takeProfit",
@@ -317,7 +363,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
       className: "border-emerald-200 bg-emerald-50 text-emerald-700",
       markerX: markerPositions.takeProfit,
       source: chartLabels.sourceLabels.strategyEngine,
-      meaning: chartLabels.meanings.takeProfit,
+      meaning: intentMeanings.takeProfit,
     },
   ];
   useEffect(() => {
@@ -369,7 +415,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
     const distanceFromEntry = ((point.price - position.entryPrice) / position.entryPrice) * 100;
     const source = markerLevel?.source ?? chartLabels.sourceLabels.estimatedStrategyPath;
     const pointType = markerLevel?.label ?? chartLabels.estimatedPath;
-    const meaning = markerLevel?.meaning ?? chartLabels.meanings.estimatedPath;
+    const meaning = markerLevel?.meaning ?? intentMeanings.estimatedPath;
 
     return (
       <div className="min-w-56 rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700 shadow-soft">

@@ -24,6 +24,7 @@ function getInputSchema(): StrategyExport["inputSchema"] {
       "timeframeCategory",
       "analysisInterval",
       "maxRiskPercentage",
+      "positionIntent",
       "strategyMode",
     ],
     properties: {
@@ -61,6 +62,11 @@ function getInputSchema(): StrategyExport["inputSchema"] {
         enum: ["auto", "trend_confirmation", "breakout_retest", "defensive_rebound", "risk_check"],
         description: "Auto or user-selected strategy mode.",
       },
+      positionIntent: {
+        type: "string",
+        enum: ["analyze_entry", "manage_open_position", "exit_review"],
+        description: "Whether the user is evaluating a new entry, managing an open position, or reviewing exit/reduction conditions.",
+      },
     },
   };
 }
@@ -97,17 +103,33 @@ function getCommonRules(position: PositionInput, decision: StrategyDecision, con
     },
     positionSizing: {
       type: "risk_based",
+      sizingMode: decision.sizingMode,
       totalCapital: position.totalCapital,
       entryPrice: position.entryPrice,
       positionSize: position.positionSize,
-      calculatedPositionSize: position.positionSize,
+      calculatedPositionSize:
+        decision.sizingMode === "calculated_new_entry" ? position.positionSize : decision.spec.riskRules.calculatedPositionSize,
       maxRiskPercentage: position.maxRiskPercentage,
       stopDistance: spec.riskRules.stopDistance,
       method: spec.riskRules.positionSizingMethod,
       estimatedRiskAmount: spec.riskRules.estimatedRiskAmount,
-      sizingNote: "Size positions from total capital, defined risk, volatility, and stop distance.",
+      sizingNote:
+        decision.sizingMode === "calculated_new_entry"
+          ? "Size possible new entries from total capital, defined risk, volatility, and stop distance."
+          : "Use the provided existing long position size; risk is measured against stop distance.",
     },
     riskManagement: {
+      positionIntent: position.positionIntent,
+      intentAction: decision.intentAction,
+      intentVerdict: decision.intentVerdict,
+      stopStatus: decision.stopStatus,
+      shouldAddExposure: decision.shouldAddExposure,
+      shouldReduceExposure: decision.shouldReduceExposure,
+      shouldExitPosition: decision.shouldExitPosition,
+      allowShort: false,
+      sellReviewMeaning: "Exit/reduce a long position; short selling is out of scope for this MVP.",
+      sizingMode: decision.sizingMode,
+      chartMode: decision.chartMode,
       maxRiskPercentage: position.maxRiskPercentage,
       riskControlled: position.maxRiskPercentage <= timeframe.maxRiskForRiskControlled,
       timeframeCategory: getTimeframeCategory(position.strategyTimeframe),
@@ -118,14 +140,61 @@ function getCommonRules(position: PositionInput, decision: StrategyDecision, con
   };
 }
 
-function getBacktestBase(position: PositionInput, strategyType: BacktestSpec["strategyType"]) {
+function getBacktestBase(position: PositionInput, decision: StrategyDecision, strategyType: BacktestSpec["strategyType"]) {
   return {
+    positionIntent: position.positionIntent,
+    intentAction: decision.intentAction,
+    intentVerdict: decision.intentVerdict,
+    stopStatus: decision.stopStatus,
+    shouldAddExposure: decision.shouldAddExposure,
+    shouldReduceExposure: decision.shouldReduceExposure,
+    shouldExitPosition: decision.shouldExitPosition,
+    allowShort: false as const,
+    sellReviewMeaning: "Exit/reduce a long position; short selling is out of scope for this MVP.",
+    sizingMode: decision.sizingMode,
+    chartMode: decision.chartMode,
     strategyType,
     strategyTimeframe: position.strategyTimeframe,
     timeframeCategory: getTimeframeCategory(position.strategyTimeframe),
     analysisInterval: position.analysisInterval,
     aggregationHint: getAggregationHint(position.strategyTimeframe),
     warning: getTimeframeWarning(position.strategyTimeframe),
+  };
+}
+
+function shouldOpenForIntent(decision: StrategyDecision, fitAllowsOpen: boolean) {
+  return decision.positionIntent === "analyze_entry" && decision.shouldAddExposure && fitAllowsOpen;
+}
+
+function getIntentSignal(decision: StrategyDecision, defaultSignal: BacktestSpec["signal"]) {
+  if (decision.shouldExitPosition) {
+    return "EXIT";
+  }
+
+  if (decision.shouldReduceExposure) {
+    return "REDUCE";
+  }
+
+  if (decision.positionIntent !== "analyze_entry") {
+    return decision.intentAction === "hold_with_trailing_exit" ? "HOLD" : "ABSTAIN";
+  }
+
+  return defaultSignal;
+}
+
+function getIntentEntryRule(position: PositionInput, baseRule: Record<string, unknown>) {
+  if (position.positionIntent === "analyze_entry") {
+    return baseRule;
+  }
+
+  return {
+    type: "none",
+    positionIntent: position.positionIntent,
+    reason:
+      position.positionIntent === "exit_review"
+        ? "Review existing exposure for reduce or exit conditions; do not open a new position."
+        : "Manage existing exposure with hold, reduce, or trailing-exit review; do not open a new position.",
+    evaluatedRule: baseRule,
   };
 }
 
@@ -141,28 +210,36 @@ export function createBacktestSpec(
 
   if (decision.noTradeRecommended || spec.strategyType === "no_trade") {
     return {
-      ...getBacktestBase(position, spec.strategyType),
-      signal: "ABSTAIN",
+      ...getBacktestBase(position, decision, spec.strategyType),
+      signal: getIntentSignal(decision, "ABSTAIN"),
       shouldOpenPosition: false,
       entryRule: {
         type: "none",
+        positionIntent: position.positionIntent,
         evaluatedStrategyType: decision.evaluatedStrategyType,
         reason:
           decision.noTradeReason ??
           spec.riskRules.noTradeReason ??
           "No-trade selected because risk or market structure is unclear.",
       },
-      exitRule: { type: "none" },
+      exitRule:
+        decision.shouldExitPosition || decision.shouldReduceExposure
+          ? {
+              type: decision.shouldExitPosition ? "exit_existing_long" : "reduce_existing_long",
+              reason: decision.suggestedAction,
+              stopStatus: decision.stopStatus,
+            }
+          : { type: "none" },
       ...common,
     };
   }
 
   if (spec.strategyType === "breakout_with_volume") {
     return {
-      ...getBacktestBase(position, spec.strategyType),
-      signal: "LONG",
-      shouldOpenPosition: fitAllowsOpen,
-      entryRule: {
+      ...getBacktestBase(position, decision, spec.strategyType),
+      signal: getIntentSignal(decision, "LONG"),
+      shouldOpenPosition: shouldOpenForIntent(decision, fitAllowsOpen),
+      entryRule: getIntentEntryRule(position, {
         type: "breakout_retest",
         closePosition: context.technicals.closePosition,
         allowedClosePositions: ["breakout", "near_resistance"],
@@ -174,7 +251,7 @@ export function createBacktestSpec(
         actualLiquidityScore: context.orderBook.liquidityScore,
         sentimentMustNotBe: "bearish",
         actualSentiment: context.sentiment.label,
-      },
+      }),
       exitRule: {
         type: "failed_retest_or_target",
         failedRetestTrigger: "close_below_breakout_or_invalidation_area",
@@ -188,10 +265,10 @@ export function createBacktestSpec(
     const riskControlled = position.maxRiskPercentage <= timeframe.maxRiskForRiskControlled;
 
     return {
-      ...getBacktestBase(position, spec.strategyType),
-      signal: riskControlled ? "CONDITIONAL_LONG" : "ABSTAIN",
-      shouldOpenPosition: riskControlled && fitAllowsOpen,
-      entryRule: {
+      ...getBacktestBase(position, decision, spec.strategyType),
+      signal: getIntentSignal(decision, riskControlled ? "CONDITIONAL_LONG" : "ABSTAIN"),
+      shouldOpenPosition: shouldOpenForIntent(decision, riskControlled && fitAllowsOpen),
+      entryRule: getIntentEntryRule(position, {
         type: riskControlled ? "support_stabilization" : "none",
         requiresSupportStabilization: true,
         support: context.technicals.support,
@@ -201,7 +278,7 @@ export function createBacktestSpec(
         reason: riskControlled
           ? "Only valid if price stabilizes near support and risk remains controlled."
           : "Risk is not controlled enough for a defensive rebound.",
-      },
+      }),
       exitRule: {
         type: "quick_loss_cut_or_recovery",
         reduceIf: "close_below_stop_loss_or_support",
@@ -212,10 +289,10 @@ export function createBacktestSpec(
   }
 
   return {
-    ...getBacktestBase(position, spec.strategyType),
-    signal: "LONG",
-    shouldOpenPosition: fitAllowsOpen,
-    entryRule: {
+    ...getBacktestBase(position, decision, spec.strategyType),
+    signal: getIntentSignal(decision, "LONG"),
+    shouldOpenPosition: shouldOpenForIntent(decision, fitAllowsOpen),
+    entryRule: getIntentEntryRule(position, {
       type: "trend_confirmation",
       requiresTrendState: ["bullish", "neutral"],
       actualTrendState: context.technicals.trendState,
@@ -231,7 +308,7 @@ export function createBacktestSpec(
       rsi14: context.technicals.rsi14,
       rsiMustBeBelow: 72,
       maxRiskPercentage: position.maxRiskPercentage,
-    },
+    }),
     exitRule: {
       type: "target_or_trailing_exit",
       trailingExit: "trail_remaining_position while price holds above trend filter",
@@ -301,6 +378,17 @@ export function createStrategyExport(
     },
     totalCapital: position.totalCapital,
     calculatedPositionSize: position.positionSize,
+    positionIntent: position.positionIntent,
+    intentAction: decision.intentAction,
+    intentVerdict: decision.intentVerdict,
+    stopStatus: decision.stopStatus,
+    shouldAddExposure: decision.shouldAddExposure,
+    shouldReduceExposure: decision.shouldReduceExposure,
+    shouldExitPosition: decision.shouldExitPosition,
+    allowShort: false,
+    sellReviewMeaning: "Exit/reduce a long position; short selling is out of scope for this MVP.",
+    sizingMode: decision.sizingMode,
+    chartMode: decision.chartMode,
     selectedStrategyMode: decision.selectedStrategyMode,
     evaluatedStrategyType: decision.evaluatedStrategyType,
     finalRiskVerdict: decision.finalRiskVerdict,
@@ -335,6 +423,18 @@ export function createStrategyExport(
     },
     strategySpec: decision.spec,
     strategyDecision: {
+      positionIntent: decision.positionIntent,
+      intentAction: decision.intentAction,
+      intentVerdict: decision.intentVerdict,
+      stopStatus: decision.stopStatus,
+      shouldAddExposure: decision.shouldAddExposure,
+      shouldReduceExposure: decision.shouldReduceExposure,
+      shouldExitPosition: decision.shouldExitPosition,
+      allowShort: false,
+      sizingMode: decision.sizingMode,
+      chartMode: decision.chartMode,
+      suggestedAction: decision.suggestedAction,
+      decisionCondition: decision.decisionCondition,
       selectedMode: decision.selectedMode,
       selectedStrategyMode: decision.selectedStrategyMode,
       evaluatedStrategyType: decision.evaluatedStrategyType,

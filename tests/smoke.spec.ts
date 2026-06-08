@@ -13,6 +13,9 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await page.getByRole("button", { name: "Español" }).click();
 
   await expect(page.getByText("Temporalidad de estrategia", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Analizar entrada", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Gestionar posición abierta", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Revisar salida / venta", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
@@ -68,12 +71,26 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await page.goto("/");
 
   await expect(page.locator("pre")).toContainText('"strategyTimeframe": "1d"');
+  await expect(page.locator("pre")).toContainText('"positionIntent": "analyze_entry"');
+  await expect(page.locator("pre")).toContainText('"intentAction"');
+  await expect(page.locator("pre")).toContainText('"stopStatus"');
+  await expect(page.locator("pre")).toContainText('"shouldAddExposure"');
+  await expect(page.locator("pre")).toContainText('"shouldReduceExposure"');
+  await expect(page.locator("pre")).toContainText('"shouldExitPosition"');
+  await expect(page.getByRole("button", { name: "Analyze entry", exact: true })).toHaveClass(/bg-sky-700/);
+  await expect(page.getByRole("button", { name: "Manage open position", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exit / Sell review", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1d", exact: true })).toHaveClass(/bg-sky-700/);
+  await expect(page.getByText("Planned entry price", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Total capital", { exact: true })).toBeVisible();
   await expect(page.locator('input[type="text"]').nth(1)).toHaveValue("1000");
   const calculatedSizeInput = page.locator('input[readonly]').first();
   await expect(calculatedSizeInput).toBeVisible();
   await expect(page.getByText("Calculated position size", { exact: true })).toBeVisible();
+  await expect(page.getByText("Intent action", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stop status", { exact: true })).toBeVisible();
+  await expect(page.getByText("Add exposure allowed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reduce/exit recommended", { exact: true })).toBeVisible();
   await expect(page.getByText("Entry", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Current", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Stop", { exact: true }).first()).toBeVisible();
@@ -83,6 +100,29 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.locator("pre")).toContainText('"totalCapital"');
   await expect(page.locator("pre")).toContainText('"calculatedPositionSize"');
   await expect(page.locator("pre")).toContainText('"trailingExit"');
+
+  await page.getByRole("button", { name: "Manage open position", exact: true }).click();
+  await expect(page.getByText("Average entry price", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Current position size", { exact: true })).toBeVisible();
+  await expect(page.locator('input[type="text"]').nth(2)).not.toHaveAttribute("readonly", "");
+  await expect(page.locator("pre")).toContainText('"positionIntent": "manage_open_position"');
+  await expect(page.locator("pre")).toContainText('"sizingMode": "existing_position"');
+  await expect(page.locator("pre")).toContainText('"shouldAddExposure": false');
+
+  await page.locator('input[type="text"]').first().fill("100");
+  await expect(page.getByText("Stop breached", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("Current price is below the stop", { exact: false }).first()).toBeVisible();
+  await expect(page.locator("pre")).toContainText('"stopStatus": "stop_breached"');
+  await expect(page.locator("pre")).toContainText('"shouldExitPosition": true');
+
+  await page.getByRole("button", { name: "Exit / Sell review", exact: true }).click();
+  await expect(page.getByText("Original entry price", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Decision condition:", { exact: true })).toBeVisible();
+  await expect(page.getByText("Exit review:", { exact: false })).toBeVisible();
+  await expect(page.locator("pre")).toContainText('"positionIntent": "exit_review"');
+  await expect(page.locator("pre")).toContainText('"shouldOpenPosition": false');
+  await expect(page.locator("pre")).toContainText('"allowShort": false');
+  await expect(page.locator("pre")).toContainText('"sellReviewMeaning"');
 
   await page.locator('input[type="range"]').fill("2");
   await expect(page.getByText("Risk above 1% is aggressive", { exact: false })).toBeVisible();

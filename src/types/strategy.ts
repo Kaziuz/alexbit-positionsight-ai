@@ -15,6 +15,26 @@ export type StrategyMode =
   | "defensive_rebound"
   | "risk_check";
 
+export type PositionIntent = "analyze_entry" | "manage_open_position" | "exit_review";
+export type IntentAction =
+  | "evaluate_entry"
+  | "wait_for_confirmation"
+  | "hold_with_trailing_exit"
+  | "reduce_risk"
+  | "exit_or_reduce"
+  | "stop_breached"
+  | "no_trade";
+export type IntentVerdict =
+  | "entry_validation"
+  | "hold"
+  | "reduce_risk"
+  | "exit_review_required"
+  | "wait"
+  | "no_trade";
+export type StopStatus = "above_stop" | "near_stop" | "stop_breached";
+export type SizingMode = "calculated_new_entry" | "existing_position";
+export type ChartMode = "entry_validation" | "position_management" | "exit_review";
+
 export type StrategyFit = "good" | "caution" | "poor";
 export type RiskVerdict = "good" | "needs_confirmation" | "poor_fit" | "no_trade_recommended";
 
@@ -154,6 +174,7 @@ export type PositionInput = {
   timeframeCategory: TimeframeCategory;
   analysisInterval: StrategyTimeframe;
   maxRiskPercentage: number;
+  positionIntent: PositionIntent;
   strategyMode?: StrategyMode;
 };
 
@@ -169,6 +190,16 @@ export type StrategySpec = {
   takeProfit: number;
   invalidationLevel: number;
   riskRules: {
+    positionIntent: PositionIntent;
+    intentAction?: IntentAction;
+    intentVerdict?: IntentVerdict;
+    stopStatus?: StopStatus;
+    shouldAddExposure?: boolean;
+    shouldReduceExposure?: boolean;
+    shouldExitPosition?: boolean;
+    allowShort?: false;
+    sizingMode?: SizingMode;
+    chartMode?: ChartMode;
     maxRiskPercentage: number;
     positionSize: number;
     totalCapital?: number;
@@ -193,6 +224,18 @@ export type StrategySpec = {
 
 export type StrategyDecision = {
   spec: StrategySpec;
+  positionIntent: PositionIntent;
+  intentAction: IntentAction;
+  intentVerdict: IntentVerdict;
+  stopStatus: StopStatus;
+  shouldAddExposure: boolean;
+  shouldReduceExposure: boolean;
+  shouldExitPosition: boolean;
+  allowShort: false;
+  sizingMode: SizingMode;
+  chartMode: ChartMode;
+  suggestedAction: string;
+  decisionCondition: string;
   selectedMode: StrategyMode;
   selectedStrategyMode: StrategyMode;
   evaluatedStrategyType: StrategyType;
@@ -207,9 +250,20 @@ export type StrategyDecision = {
   beginnerExplanation: string;
 };
 
-export type BacktestSignal = "LONG" | "REDUCE" | "EXIT" | "ABSTAIN" | "CONDITIONAL_LONG";
+export type BacktestSignal = "LONG" | "HOLD" | "REDUCE" | "EXIT" | "ABSTAIN" | "CONDITIONAL_LONG";
 
 export type BacktestSpec = {
+  positionIntent: PositionIntent;
+  intentAction?: IntentAction;
+  intentVerdict?: IntentVerdict;
+  stopStatus?: StopStatus;
+  shouldAddExposure?: boolean;
+  shouldReduceExposure?: boolean;
+  shouldExitPosition?: boolean;
+  allowShort?: false;
+  sellReviewMeaning?: string;
+  sizingMode?: SizingMode;
+  chartMode?: ChartMode;
   strategyType: StrategyType;
   strategyTimeframe: StrategyTimeframe;
   timeframeCategory: TimeframeCategory;
@@ -266,6 +320,17 @@ export type StrategyExport = {
   };
   totalCapital?: number;
   calculatedPositionSize?: number;
+  positionIntent: PositionIntent;
+  intentAction?: IntentAction;
+  intentVerdict?: IntentVerdict;
+  stopStatus?: StopStatus;
+  shouldAddExposure?: boolean;
+  shouldReduceExposure?: boolean;
+  shouldExitPosition?: boolean;
+  allowShort?: false;
+  sellReviewMeaning?: string;
+  sizingMode?: SizingMode;
+  chartMode?: ChartMode;
   trailingExit?: {
     enabled: true;
     method: "atr_ma_trailing";

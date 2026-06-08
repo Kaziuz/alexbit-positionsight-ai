@@ -30,7 +30,10 @@ Because this project does not execute trades and does not deploy or control an o
 - Supports strategy timeframes of 15m, 30m, 1h, 1d, 1w, and 1mo.
 - Treats intraday timeframes as higher-risk research contexts that require stronger confirmation.
 - Defaults to 1d context and 1% risk for patient, capital-preservation-oriented analysis.
-- Calculates position size from total capital, risk percentage, entry price, ATR, and stop distance.
+- Calculates new-entry position size from total capital, risk percentage, entry price, ATR, and stop distance.
+- Supports position intent: analyze entry, manage open position, or review exit/sell conditions.
+- Treats manage/exit intents as existing long-position reviews, not fresh buy signals.
+- Flags breached stops as exit/risk reviews instead of presenting the position as healthy.
 - Lets users choose Auto Recommended or a manual strategy mode.
 - Explains each strategy mode with beginner-friendly educational cards.
 - Generates an explainable strategy decision and risk signal.
@@ -42,6 +45,7 @@ Because this project does not execute trades and does not deploy or control an o
 - Does not execute trades.
 - Does not connect to wallets.
 - Does not use Binance trading execution.
+- Does not short sell.
 - Does not provide financial advice.
 - Does not expose API keys client-side.
 - Does not require an on-chain agent address.
@@ -138,6 +142,14 @@ It includes:
 - `indicators`
 - `chartSeriesType`
 - `advancedContextType`
+- `positionIntent`
+- `intentAction`
+- `intentVerdict`
+- `stopStatus`
+- `shouldAddExposure`
+- `shouldReduceExposure`
+- `shouldExitPosition`
+- `allowShort: false`
 - `strategySpec`
 - `strategyDecision`
 - `selectedStrategyMode`
@@ -164,6 +176,8 @@ The export preserves both human-readable strategy explanations and machine-reada
 - English / Spanish language toggle.
 - Strategy Timeframe selector: 15m, 30m, 1h, 1d, 1w, 1mo.
 - Strategy mode selector.
+- Position intent selector for entry analysis, open-position management, and exit/sell review.
+- Intent-aware risk panel for add, hold, reduce, and exit-review decisions.
 - Beginner-friendly strategy explanation cards.
 - Risk visualization.
 - Strategy signal panel.
@@ -192,6 +206,7 @@ The export preserves both human-readable strategy explanations and machine-reada
 - Intraday timeframes are supported for testing and research, but the engine treats them with more caution and does not encourage overtrading.
 - Historical OHLCV access depends on the CoinMarketCap plan; estimated candles and indicators remain clearly labeled when OHLCV is unavailable.
 - There is no live trade execution.
+- Sell review means reducing or exiting an existing long position; short selling is out of scope.
 - Strategy output is educational and not financial advice.
 
 ## Roadmap

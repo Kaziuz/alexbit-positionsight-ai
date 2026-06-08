@@ -3,7 +3,7 @@ import { getMockMarketContext } from "@/data/mock-market";
 import { parseLocalizedNumberInput } from "@/lib/number-input";
 import { generateStrategyDecision } from "@/lib/strategy-engine";
 import { getTimeframeCategory, strategyTimeframes } from "@/lib/strategy-timeframe";
-import type { PositionInput, StrategyMode, StrategyTimeframe } from "@/types/strategy";
+import type { PositionInput, PositionIntent, StrategyMode, StrategyTimeframe } from "@/types/strategy";
 
 type PositionRequestBody = {
   symbol?: unknown;
@@ -13,8 +13,11 @@ type PositionRequestBody = {
   strategyTimeframe?: unknown;
   analysisInterval?: unknown;
   maxRiskPercentage?: unknown;
+  positionIntent?: unknown;
   strategyMode?: unknown;
 };
+
+const positionIntents = ["analyze_entry", "manage_open_position", "exit_review"] as const satisfies readonly PositionIntent[];
 
 function parseRequestNumber(value: unknown) {
   if (typeof value === "number") {
@@ -42,6 +45,10 @@ export async function POST(request: Request) {
       ? (body.strategyTimeframe as StrategyTimeframe)
       : undefined;
   const strategyMode = typeof body.strategyMode === "string" ? (body.strategyMode as StrategyMode) : "auto";
+  const positionIntent =
+    typeof body.positionIntent === "string" && positionIntents.includes(body.positionIntent as PositionIntent)
+      ? (body.positionIntent as PositionIntent)
+      : "analyze_entry";
   const context = getMockMarketContext(symbol);
 
   if (!context) {
@@ -71,6 +78,7 @@ export async function POST(request: Request) {
     timeframeCategory: getTimeframeCategory(strategyTimeframe),
     analysisInterval: strategyTimeframe,
     maxRiskPercentage: maxRiskPercentage.value,
+    positionIntent,
     strategyMode,
   };
 

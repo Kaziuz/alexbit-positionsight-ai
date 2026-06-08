@@ -21,6 +21,7 @@ The strategy engine receives:
 * Timeframe category: `intraday`, `daily`, `weekly`, or `monthly`
 * Analysis interval: same as the selected strategy timeframe
 * Maximum risk percentage, defaulting to a risk-first `1%`
+* Position intent: `analyze_entry`, `manage_open_position`, or `exit_review`
 * Market data source
 * Market quote
 * Technical context, calculated from OHLCV when available or estimated when OHLCV is unavailable
@@ -37,7 +38,8 @@ Example input:
   "strategyTimeframe": "1d",
   "timeframeCategory": "daily",
   "analysisInterval": "1d",
-  "maxRiskPercentage": 1
+  "maxRiskPercentage": 1,
+  "positionIntent": "analyze_entry"
 }
 ```
 
@@ -83,6 +85,25 @@ The beginner UI presents the compatible `takeProfit` value as a `Trailing exit` 
 
 ---
 
+## Position Intent
+
+PositionSight supports three non-executing intent modes:
+
+* `analyze_entry`: Evaluate whether a new entry setup is valid.
+* `manage_open_position`: Review whether an existing position should be held, reduced, trailed, or left unchanged.
+* `exit_review`: Review whether an existing position should be reduced or exited based on stop, trailing exit, support loss, risk, and market context.
+
+The intent now changes the actual decision layer:
+
+* `analyze_entry` can allow adding long exposure only when confirmation and risk are acceptable.
+* `manage_open_position` uses existing holdings and does not create a fresh buy/open rule by default.
+* `exit_review` reviews hold, reduce, or exit conditions for an existing long position.
+* If current price is at or below the stop, `stopStatus` becomes `stop_breached` and the decision must not present the position as healthy.
+
+Sell review means reducing or exiting an existing long position. It does not add exchange execution, wallet connection, order placement, Binance integration, short selling, or live trading.
+
+---
+
 ## StrategySpec
 
 `StrategySpec` is the stable human-readable strategy object.
@@ -91,6 +112,7 @@ Fields:
 
 * `asset`: Token symbol.
 * `strategyTimeframe`: Selected timeframe.
+* `positionIntent`: The user's selected intent.
 * `timeframeCategory`: Derived timeframe category.
 * `analysisInterval`: Backtest interval, matching the selected timeframe.
 * `strategyType`: One of `trend_following_pullback`, `breakout_with_volume`, `defensive_mean_reversion`, or `no_trade`.
@@ -99,7 +121,7 @@ Fields:
 * `stopLoss`: Suggested stop level, preferring ATR-based volatility distance when available.
 * `takeProfit`: Compatibility field used as the initial trailing-exit reference.
 * `invalidationLevel`: Price level where the strategy thesis is considered invalid.
-* `riskRules`: Max risk, total capital, calculated position size, stop distance, estimated risk amount, and optional no-trade reason.
+* `riskRules`: Position intent, max risk, total capital, calculated position size, stop distance, estimated risk amount, and optional no-trade reason.
 * `dataUsed`: Entry price, current price, 24h change, volume, market cap, data source, and timestamp.
 
 ---
@@ -115,6 +137,15 @@ The UI exports a richer `StrategyDecision` wrapper around `StrategySpec`.
 * `selectedStrategyMode`: Same selected mode, repeated for export consumers.
 * `evaluatedStrategyType`: The strategy type currently being evaluated in the UI.
 * `finalRiskVerdict`: `good`, `needs_confirmation`, `poor_fit`, or `no_trade_recommended`.
+* `intentAction`: `evaluate_entry`, `wait_for_confirmation`, `hold_with_trailing_exit`, `reduce_risk`, `exit_or_reduce`, `stop_breached`, or `no_trade`.
+* `intentVerdict`: Entry, hold, reduce, exit-review, wait, or no-trade verdict.
+* `stopStatus`: `above_stop`, `near_stop`, or `stop_breached`.
+* `shouldAddExposure`: Whether the strategy allows adding long exposure.
+* `shouldReduceExposure`: Whether reducing long exposure is recommended.
+* `shouldExitPosition`: Whether the existing long position should be treated as an exit review.
+* `allowShort`: Always `false`.
+* `sizingMode`: `calculated_new_entry` or `existing_position`.
+* `chartMode`: Entry validation, position management, or exit review.
 * `noTradeRecommended`: Boolean risk verdict flag.
 * `noTradeReason`: Optional reason shown when the risk engine recommends no-trade.
 * `selectedBy`: `auto` or `user`.
@@ -141,6 +172,10 @@ Top-level fields:
 * `chartSeriesType`: `historical_ohlcv` when real candles are available, otherwise `estimated_from_live_quote_context`.
 * `advancedContextType`: `estimated_until_ohlcv` for fields that still depend on unavailable historical data.
 * `dataRequirements`: OHLCV requirements, minimum history, lookback periods, and required indicators.
+* `positionIntent`: Selected non-executing user intent.
+* `intentAction`, `intentVerdict`, and `stopStatus`: Intent-aware decision metadata.
+* `shouldAddExposure`, `shouldReduceExposure`, and `shouldExitPosition`: Long-only exposure management flags.
+* `allowShort`: Always `false`.
 * `history`: Historical source, candles used, indicator source, indicators, and indicator warnings.
 * `selectedStrategyMode`: Strategy mode chosen by the user or Auto Recommended.
 * `evaluatedStrategyType`: Strategy type evaluated for the current decision.
@@ -179,11 +214,12 @@ It includes:
 
 * `strategyType`
 * `strategyTimeframe`
+* `positionIntent`
 * `timeframeCategory`
 * `analysisInterval`
 * Optional `aggregationHint` for weekly/monthly analysis
 * Optional intraday `warning`
-* `signal`: `LONG`, `REDUCE`, `CONDITIONAL_LONG`, `EXIT`, or `ABSTAIN`
+* `signal`: `LONG`, `HOLD`, `REDUCE`, `CONDITIONAL_LONG`, `EXIT`, or `ABSTAIN`
 * `shouldOpenPosition`
 * `entryRule`
 * `exitRule`
@@ -195,6 +231,8 @@ It includes:
 * `riskManagement`
 
 For intraday selections, `backtestSpec.warning` notes that shorter timeframes require stronger confirmation and may be more speculative.
+
+For `manage_open_position` and `exit_review`, `shouldOpenPosition` remains `false`; the artifact reviews hold/reduce/exit conditions and does not create execution instructions. `EXIT` and `REDUCE` mean long-position risk review outcomes, not short selling.
 
 ### No-Trade As ABSTAIN
 
@@ -266,6 +304,8 @@ The UI uses `MA 20`, `MA 50`, and `MA 200` labels. Internally, existing EMA-deri
 
 CoinMarketCap latest quote fields are live when `CMC_API_KEY` is configured. Indicators are real only when OHLCV candles are available. Future versions should map market-pair liquidity, news/community signals, and other available data into the same `MarketContext` shape.
 
+TODO for future data depth: market pairs, richer sentiment sources, order book/liquidity feeds, and derivatives context can enhance the existing liquidity/sentiment fields when the product is ready for additional integrations.
+
 ---
 
 ## Strategy Selection Logic
@@ -294,6 +334,7 @@ The engine does not no-trade solely because the selected timeframe is intraday.
   "timeframeCategory": "daily",
   "analysisInterval": "1d",
   "strategyType": "defensive_mean_reversion",
+  "positionIntent": "analyze_entry",
   "entryCondition": "Do not add exposure unless risk is controlled and price stabilizes near support with evidence of a rebound.",
   "exitCondition": "Reduce quickly if price loses the stop level, and only hold for recovery if the selected timeframe confirms support.",
   "stopLoss": 32.98,
@@ -301,6 +342,7 @@ The engine does not no-trade solely because the selected timeframe is intraday.
   "invalidationLevel": 32.98,
   "riskRules": {
     "maxRiskPercentage": 1,
+    "positionIntent": "analyze_entry",
     "totalCapital": 1000,
     "positionSize": 2.6578,
     "calculatedPositionSize": 2.6578,

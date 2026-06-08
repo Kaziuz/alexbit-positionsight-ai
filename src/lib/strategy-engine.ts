@@ -1,6 +1,10 @@
 import type {
   MarketContext,
   MarketQuote,
+  ChartMode,
+  IntentAction,
+  IntentVerdict,
+  PositionIntent,
   PositionInput,
   StrategyDecision,
   StrategyFit,
@@ -8,6 +12,8 @@ import type {
   StrategySpec,
   StrategyType,
   RiskVerdict,
+  SizingMode,
+  StopStatus,
 } from "@/types/strategy";
 import { getTimeframeCategory, getTimeframeProfile } from "./strategy-timeframe";
 
@@ -24,7 +30,6 @@ function roundPrice(value: number) {
 }
 
 const atrStopMultiple = 1.75;
-
 function getPositiveAtr(context: MarketContext | undefined) {
   const atr = context?.technicals.atr14;
 
@@ -261,6 +266,31 @@ function copyForStrategy(strategyType: StrategyType) {
   return copy[strategyType];
 }
 
+function applyIntentCopy(
+  positionIntent: PositionIntent,
+  copy: { entryCondition: string; exitCondition: string },
+) {
+  if (positionIntent === "manage_open_position") {
+    return {
+      entryCondition:
+        "Manage the existing position by reviewing hold, reduce, wait, or trailing-exit conditions against the selected timeframe.",
+      exitCondition:
+        "Hold only while support, risk, and trailing-exit conditions remain constructive; reduce if stop, support, or market context weakens.",
+    };
+  }
+
+  if (positionIntent === "exit_review") {
+    return {
+      entryCondition:
+        "Decision condition: review whether the existing position should be reduced or exited based on stop, trailing exit, support loss, risk, and market context.",
+      exitCondition:
+        "Reduce or exit if price loses stop/support, trailing-exit protection is triggered, or risk context no longer supports holding.",
+    };
+  }
+
+  return copy;
+}
+
 function buildStrategySpec(
   position: PositionInput,
   input: MarketQuote | MarketContext,
@@ -290,7 +320,7 @@ function buildStrategySpec(
   const takeProfit = roundPrice(position.entryPrice + stopDistance * 1.8);
   const invalidationLevel = strategyType === "defensive_mean_reversion" ? stopLoss : roundPrice(stopLoss * 0.995);
   const estimatedRiskAmount = roundPrice(Math.abs(position.entryPrice - stopLoss) * position.positionSize);
-  const copy = copyForStrategy(strategyType);
+  const copy = applyIntentCopy(position.positionIntent, copyForStrategy(strategyType));
 
   return {
     asset: position.symbol,
@@ -304,6 +334,8 @@ function buildStrategySpec(
     takeProfit,
     invalidationLevel,
     riskRules: {
+      positionIntent: position.positionIntent,
+      allowShort: false,
       maxRiskPercentage: position.maxRiskPercentage,
       positionSize: position.positionSize,
       totalCapital: position.totalCapital,
@@ -324,6 +356,198 @@ function buildStrategySpec(
       source: quote.source,
       lastUpdated: quote.lastUpdated,
     },
+  };
+}
+
+function getStopStatus(quote: MarketQuote, spec: StrategySpec): StopStatus {
+  if (quote.price <= spec.stopLoss) {
+    return "stop_breached";
+  }
+
+  const stopDistanceRatio = Math.abs(quote.price - spec.stopLoss) / quote.price;
+
+  return stopDistanceRatio <= 0.03 ? "near_stop" : "above_stop";
+}
+
+function getIntentDecision(
+  position: PositionInput,
+  input: MarketQuote | MarketContext,
+  spec: StrategySpec,
+  baseVerdict: RiskVerdict,
+  baseNoTradeRecommended: boolean,
+): {
+  intentAction: IntentAction;
+  intentVerdict: IntentVerdict;
+  stopStatus: StopStatus;
+  shouldAddExposure: boolean;
+  shouldReduceExposure: boolean;
+  shouldExitPosition: boolean;
+  allowShort: false;
+  sizingMode: SizingMode;
+  chartMode: ChartMode;
+  riskVerdict: RiskVerdict;
+  noTradeRecommended: boolean;
+  noTradeReason?: string;
+  suggestedAction: string;
+  decisionCondition: string;
+  nextConfirmation: string;
+  beginnerExplanation: string;
+  warnings: string[];
+} {
+  const quote = quoteFromInput(input);
+  const context = isMarketContext(input) ? input : undefined;
+  const stopStatus = getStopStatus(quote, spec);
+  const trendWeak =
+    context?.technicals.trendState === "bearish" ||
+    context?.sentiment.label === "bearish" ||
+    context?.technicals.closePosition === "breakdown" ||
+    (context ? quote.price < context.technicals.support : false);
+  const losingButAboveStop = quote.price < position.entryPrice && stopStatus !== "stop_breached";
+  const baseAllowsEntry = !baseNoTradeRecommended && baseVerdict !== "poor_fit" && stopStatus !== "stop_breached";
+  const warnings: string[] = [];
+  const sizingMode: SizingMode =
+    position.positionIntent === "analyze_entry" ? "calculated_new_entry" : "existing_position";
+  const chartMode: ChartMode =
+    position.positionIntent === "analyze_entry"
+      ? "entry_validation"
+      : position.positionIntent === "manage_open_position"
+        ? "position_management"
+        : "exit_review";
+
+  if (stopStatus === "stop_breached") {
+    warnings.push("Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.");
+  }
+
+  if (position.positionIntent === "analyze_entry") {
+    const shouldAddExposure = baseAllowsEntry && baseVerdict === "good";
+    const intentAction: IntentAction = baseNoTradeRecommended
+      ? "no_trade"
+      : shouldAddExposure
+        ? "evaluate_entry"
+        : "wait_for_confirmation";
+
+    return {
+      intentAction,
+      intentVerdict: baseNoTradeRecommended ? "no_trade" : shouldAddExposure ? "entry_validation" : "wait",
+      stopStatus,
+      shouldAddExposure,
+      shouldReduceExposure: false,
+      shouldExitPosition: false,
+      allowShort: false,
+      sizingMode,
+      chartMode,
+      riskVerdict: baseVerdict,
+      noTradeRecommended: baseNoTradeRecommended,
+      noTradeReason: baseNoTradeRecommended ? spec.riskRules.noTradeReason : undefined,
+      suggestedAction: shouldAddExposure
+        ? "Entry allowed only if the confirmation rules remain valid."
+        : "Wait for confirmation before adding exposure.",
+      decisionCondition: "Validate a planned long entry against risk, stop distance, trend, liquidity, and confirmation.",
+      nextConfirmation: "Wait for the selected timeframe to confirm the setup before adding exposure.",
+      beginnerExplanation:
+        "Analyze entry mode sizes a possible new long position from capital, defined risk, and stop distance.",
+      warnings,
+    };
+  }
+
+  if (position.positionIntent === "manage_open_position") {
+    if (stopStatus === "stop_breached") {
+      return {
+        intentAction: "stop_breached",
+        intentVerdict: "exit_review_required",
+        stopStatus,
+        shouldAddExposure: false,
+        shouldReduceExposure: true,
+        shouldExitPosition: true,
+        allowShort: false,
+        sizingMode,
+        chartMode,
+        riskVerdict: "no_trade_recommended",
+        noTradeRecommended: true,
+        noTradeReason: "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.",
+        suggestedAction: "Stop breached. Review exit or risk reduction immediately.",
+        decisionCondition: "Manage the existing long position; do not add exposure while price is below the stop.",
+        nextConfirmation: "Confirm whether the stop breach persists on the selected timeframe before deciding reduce or exit.",
+        beginnerExplanation:
+          "A breached stop means the position is no longer healthy under this risk model. This is not a fresh entry setup.",
+        warnings,
+      };
+    }
+
+    const shouldReduceExposure = losingButAboveStop || trendWeak || baseNoTradeRecommended;
+    const intentAction: IntentAction = shouldReduceExposure ? "reduce_risk" : "hold_with_trailing_exit";
+
+    return {
+      intentAction,
+      intentVerdict: shouldReduceExposure ? "reduce_risk" : "hold",
+      stopStatus,
+      shouldAddExposure: false,
+      shouldReduceExposure,
+      shouldExitPosition: false,
+      allowShort: false,
+      sizingMode,
+      chartMode,
+      riskVerdict: shouldReduceExposure ? "needs_confirmation" : baseVerdict,
+      noTradeRecommended: baseNoTradeRecommended && shouldReduceExposure,
+      noTradeReason: baseNoTradeRecommended ? spec.riskRules.noTradeReason : undefined,
+      suggestedAction: shouldReduceExposure
+        ? "Reduce risk or hold only if support and trailing-exit conditions remain valid."
+        : "Hold with trailing exit while trend, support, and risk remain constructive.",
+      decisionCondition: "Manage an existing long position with hold, reduce, wait, or trailing-exit conditions.",
+      nextConfirmation:
+        "Review support, stop distance, and trailing-exit behavior before increasing or reducing exposure.",
+      beginnerExplanation:
+        "Open-position management uses your existing holdings. It does not calculate a fresh buy or add exposure automatically.",
+      warnings,
+    };
+  }
+
+  if (stopStatus === "stop_breached") {
+    return {
+      intentAction: "exit_or_reduce",
+      intentVerdict: "exit_review_required",
+      stopStatus,
+      shouldAddExposure: false,
+      shouldReduceExposure: true,
+      shouldExitPosition: true,
+      allowShort: false,
+      sizingMode,
+      chartMode,
+      riskVerdict: "no_trade_recommended",
+      noTradeRecommended: true,
+      noTradeReason: "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.",
+      suggestedAction: "Exit or reduce review required because the stop is breached.",
+      decisionCondition: "Review whether the existing long position should be reduced or exited.",
+      nextConfirmation: "Check whether price can reclaim the stop/support area before considering continued exposure.",
+      beginnerExplanation:
+        "Sell review means protecting an existing long position. It does not open a short position or execute a sale.",
+      warnings,
+    };
+  }
+
+  const shouldReduceExposure = trendWeak || losingButAboveStop || baseNoTradeRecommended;
+
+  return {
+    intentAction: shouldReduceExposure ? "reduce_risk" : "hold_with_trailing_exit",
+    intentVerdict: shouldReduceExposure ? "reduce_risk" : "hold",
+    stopStatus,
+    shouldAddExposure: false,
+    shouldReduceExposure,
+    shouldExitPosition: false,
+    allowShort: false,
+    sizingMode,
+    chartMode,
+    riskVerdict: shouldReduceExposure ? "needs_confirmation" : baseVerdict,
+    noTradeRecommended: baseNoTradeRecommended && shouldReduceExposure,
+    noTradeReason: baseNoTradeRecommended ? spec.riskRules.noTradeReason : undefined,
+    suggestedAction: shouldReduceExposure
+      ? "Reduce risk or prepare an exit if support, stop, or trailing-exit protection weakens."
+      : "Hold with trailing exit while the trend and support remain valid.",
+    decisionCondition: "Review the existing long position for hold, reduce, or exit conditions.",
+    nextConfirmation: "Check stop, support, trailing-exit protection, and market context before deciding to reduce or exit.",
+    beginnerExplanation:
+      "Exit review is a long-position risk review. It helps decide hold, reduce, or exit; it is not short selling.",
+    warnings,
   };
 }
 
@@ -414,7 +638,11 @@ function evaluateRequestedStrategy(
         ? `The selected ${labels[requestedType]} mode matches the current market context.`
         : `Auto mode prefers ${labels[autoType]}, while the selected mode needs more confirmation.`,
     nextConfirmation:
-      requestedType === "breakout_with_volume"
+      position.positionIntent === "exit_review"
+        ? "Check whether price is losing stop, support, trailing-exit protection, or risk context before deciding to reduce or exit."
+        : position.positionIntent === "manage_open_position"
+          ? "Review whether holding remains valid, whether to reduce risk, or whether trailing-exit protection should lead."
+          : requestedType === "breakout_with_volume"
         ? "Wait for price to hold above the breakout area after a retest."
         : requestedType === "trend_following_pullback"
           ? "Wait for the selected timeframe to close above support or the trend filter."
@@ -422,7 +650,11 @@ function evaluateRequestedStrategy(
             ? "Wait for stabilization near support and avoid averaging down without confirmation."
             : "Wait for risk, liquidity, and market structure to improve before taking a new setup.",
     beginnerExplanation:
-      requestedType === "no_trade"
+      position.positionIntent === "exit_review"
+        ? "Exit review means checking whether risk controls or market structure argue for reducing exposure. It is not an execution command."
+        : position.positionIntent === "manage_open_position"
+          ? "Open-position management focuses on holding, reducing, waiting, or using trailing exits instead of adding risk automatically."
+          : requestedType === "no_trade"
         ? "No-trade means protecting capital when the setup is not clear enough."
         : "PositionSight compares the selected setup against trend, risk, liquidity, and momentum context before recommending it.",
   };
@@ -441,17 +673,50 @@ export function generateStrategyDecision(
   const autoType = getAutoStrategyType(position, input);
   const requestedType = getModeStrategyType(selectedMode) ?? autoType;
   const evaluation = evaluateRequestedStrategy(position, input, requestedType);
-  const finalRiskVerdict = getRiskVerdict(requestedType, autoType, evaluation.fit);
-  const noTradeRecommended = finalRiskVerdict === "no_trade_recommended";
-  const noTradeReason = noTradeRecommended
+  const baseRiskVerdict = getRiskVerdict(requestedType, autoType, evaluation.fit);
+  const baseNoTradeRecommended = baseRiskVerdict === "no_trade_recommended";
+  const baseNoTradeReason = baseNoTradeRecommended
     ? autoType === "no_trade" || requestedType === "no_trade"
       ? getNoTradeReason(position, input)
       : evaluation.warnings[0] ?? "Risk or market structure is unclear for this selected strategy."
     : undefined;
-  const spec = buildStrategySpec(position, input, requestedType, noTradeReason);
+  const spec = buildStrategySpec(position, input, requestedType, baseNoTradeReason);
+  const intentDecision = getIntentDecision(position, input, spec, baseRiskVerdict, baseNoTradeRecommended);
+  const finalRiskVerdict = intentDecision.riskVerdict;
+  const noTradeRecommended = intentDecision.noTradeRecommended;
+  const noTradeReason = intentDecision.noTradeReason ?? baseNoTradeReason;
+  const mergedWarnings = [...evaluation.warnings, ...intentDecision.warnings].filter(
+    (warning, index, warnings) => warnings.indexOf(warning) === index,
+  );
+
+  spec.riskRules.intentAction = intentDecision.intentAction;
+  spec.riskRules.intentVerdict = intentDecision.intentVerdict;
+  spec.riskRules.stopStatus = intentDecision.stopStatus;
+  spec.riskRules.shouldAddExposure = intentDecision.shouldAddExposure;
+  spec.riskRules.shouldReduceExposure = intentDecision.shouldReduceExposure;
+  spec.riskRules.shouldExitPosition = intentDecision.shouldExitPosition;
+  spec.riskRules.allowShort = false;
+  spec.riskRules.sizingMode = intentDecision.sizingMode;
+  spec.riskRules.chartMode = intentDecision.chartMode;
+  spec.riskRules.noTradeReason = noTradeReason ?? spec.riskRules.noTradeReason;
+  spec.riskRules.warnings = [...(spec.riskRules.warnings ?? []), ...mergedWarnings].filter(
+    (warning, index, warnings) => warnings.indexOf(warning) === index,
+  );
 
   return {
     spec,
+    positionIntent: position.positionIntent,
+    intentAction: intentDecision.intentAction,
+    intentVerdict: intentDecision.intentVerdict,
+    stopStatus: intentDecision.stopStatus,
+    shouldAddExposure: intentDecision.shouldAddExposure,
+    shouldReduceExposure: intentDecision.shouldReduceExposure,
+    shouldExitPosition: intentDecision.shouldExitPosition,
+    allowShort: false,
+    sizingMode: intentDecision.sizingMode,
+    chartMode: intentDecision.chartMode,
+    suggestedAction: intentDecision.suggestedAction,
+    decisionCondition: intentDecision.decisionCondition,
     selectedMode,
     selectedStrategyMode: selectedMode,
     evaluatedStrategyType: requestedType,
@@ -464,8 +729,8 @@ export function generateStrategyDecision(
       selectedBy === "auto"
         ? `Auto Recommended selected this because the strongest fit is ${spec.strategyType.replaceAll("_", " ")}.`
         : evaluation.why,
-    warnings: evaluation.warnings,
-    nextConfirmation: evaluation.nextConfirmation,
-    beginnerExplanation: evaluation.beginnerExplanation,
+    warnings: mergedWarnings,
+    nextConfirmation: intentDecision.nextConfirmation || evaluation.nextConfirmation,
+    beginnerExplanation: intentDecision.beginnerExplanation || evaluation.beginnerExplanation,
   };
 }

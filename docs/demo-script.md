@@ -22,6 +22,7 @@ Use the default state:
 
 - Token mode: `Beginner`
 - Token: `AVAX`
+- Position intent: `Analyze entry`
 - Entry price: `34`
 - Total capital: `1000`
 - Calculated position size: shown as read-only
@@ -44,6 +45,10 @@ Open `Breakout + Retest` or `Risk Check / No-Trade` to show the beginner-friendl
 - Avoid when
 - What the system checks
 - Beginner note
+
+Switch Position intent to `Manage open position` and point out that the position size field becomes editable existing holdings. The panel now talks about holding, reducing, waiting, stop status, and trailing exit instead of a fresh buy. Switch to `Exit / Sell review` and point out that the visible condition becomes a sell/reduce/hold review for an existing long position, not a buy signal and not short selling.
+
+For a stop-breach example, set an intentionally high average entry price so current price is below the stop. The panel should show stop breached / exit review required and should not describe the position as healthy.
 
 ### 1:15 - 1:35: LINK No-Trade Scenario
 
@@ -81,6 +86,7 @@ The export includes:
 
 - `strategySpec`
 - strategy decision metadata
+- `positionIntent`
 - `marketContext`
 - `dataProvenance`
 - `strategyTimeframe`
@@ -89,6 +95,12 @@ The export includes:
 - `evaluatedStrategyType`
 - `finalRiskVerdict`
 - `noTradeRecommended`
+- `intentAction`
+- `stopStatus`
+- `shouldAddExposure`
+- `shouldReduceExposure`
+- `shouldExitPosition`
+- `allowShort: false`
 - execution assumptions
 - evaluation metrics
 

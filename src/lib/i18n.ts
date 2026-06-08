@@ -16,9 +16,13 @@ export const translations = {
     beginner: "Beginner",
     advanced: "Advanced",
     eligibleToken: "Eligible token",
+    positionIntent: "Position intent",
     entryPrice: "Entry price",
     positionSize: "Position size",
     totalCapital: "Total capital",
+    currentPositionSize: "Current position size",
+    currentPositionSizeHelper: "Existing holdings used to measure open-position risk against the stop.",
+    existingPositionRisk: "Estimated risk on existing position",
     calculatedPositionSize: "Calculated position size",
     calculatedPositionSizeHelper: "Calculated from capital, risk, entry price, ATR, and stop distance.",
     strategyTimeframe: "Strategy Timeframe",
@@ -70,6 +74,13 @@ export const translations = {
     strategyEvaluated: "Strategy evaluated",
     selectedStrategy: "Selected strategy",
     riskVerdict: "Risk verdict",
+    intentAction: "Intent action",
+    stopStatus: "Stop status",
+    suggestedAction: "Suggested action:",
+    addExposureAllowed: "Add exposure allowed",
+    reduceOrExitRecommended: "Reduce/exit recommended",
+    yes: "Yes",
+    no: "No",
     fit: "Fit",
     selectedBy: "Selected by",
     auto: "Auto",
@@ -77,6 +88,8 @@ export const translations = {
     estimatedRisk: "Estimated risk",
     dataSource: "Data source",
     whyThisStrategy: "Why this strategy?",
+    entryCondition: "Entry condition:",
+    decisionCondition: "Decision condition:",
     nextConfirmation: "Next confirmation:",
     beginnerNote: "Beginner note:",
     noTradeReason: "No-trade reason",
@@ -121,6 +134,41 @@ export const translations = {
     positionSizeFallbackWarning: "Stop distance was invalid, so PositionSight used the percent-based fallback.",
     stopLossClampedWarning: "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.",
     positionSizeInvalidWarning: "Calculated position size is unavailable. Check capital, risk, entry, and stop distance.",
+    stopBreachWarning:
+      "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.",
+    intentEntryPriceLabels: {
+      analyze_entry: "Planned entry price",
+      manage_open_position: "Average entry price",
+      exit_review: "Original entry price",
+    },
+    intentEntryPriceTooltips: {
+      analyze_entry: "The price where you are considering a planned long entry.",
+      manage_open_position: "Your average entry price for the existing long position.",
+      exit_review: "The original or average entry price for the long position you are reviewing.",
+    },
+    intentActionLabels: {
+      evaluate_entry: "Evaluate entry",
+      wait_for_confirmation: "Wait for confirmation",
+      hold_with_trailing_exit: "Hold with trailing exit",
+      reduce_risk: "Reduce risk",
+      exit_or_reduce: "Exit or reduce",
+      stop_breached: "Stop breached",
+      no_trade: "No-trade",
+    },
+    intentSuggestedActionLabels: {
+      evaluate_entry: "Entry allowed only if confirmation remains valid.",
+      wait_for_confirmation: "Wait for confirmation before adding exposure.",
+      hold_with_trailing_exit: "Hold with trailing exit while trend and support remain valid.",
+      reduce_risk: "Reduce risk or hold only if support and trailing-exit rules remain valid.",
+      exit_or_reduce: "Review exit or reduction for the existing long position.",
+      stop_breached: "Stop breached. Review exit or risk reduction immediately.",
+      no_trade: "No new exposure. Protect capital until the setup improves.",
+    },
+    stopStatusLabels: {
+      above_stop: "Above stop",
+      near_stop: "Near stop",
+      stop_breached: "Stop breached",
+    },
     fitLabels: {
       good: "Good",
       caution: "Caution",
@@ -131,6 +179,11 @@ export const translations = {
       needs_confirmation: "Needs confirmation",
       poor_fit: "Poor fit",
       no_trade_recommended: "No-trade recommended",
+    },
+    positionIntentLabels: {
+      analyze_entry: "Analyze entry",
+      manage_open_position: "Manage open position",
+      exit_review: "Exit / Sell review",
     },
     chartLabels: {
       stop: "Stop",
@@ -155,6 +208,29 @@ export const translations = {
         stop: "risk control level",
         takeProfit: "ATR/MA trailing module",
         estimatedPath: "estimated visual path until historical OHLCV is available",
+      },
+      intentMeanings: {
+        analyze_entry: {
+          entry: "planned long entry price",
+          current: "latest CoinMarketCap live quote",
+          stop: "risk stop for the planned entry",
+          takeProfit: "initial trailing-exit reference if the entry confirms",
+          estimatedPath: "estimated setup path until historical OHLCV is available",
+        },
+        manage_open_position: {
+          entry: "average entry for the existing long position",
+          current: "latest CoinMarketCap live quote for the open position",
+          stop: "risk stop for the existing long position",
+          takeProfit: "trailing-exit reference for managing the position",
+          estimatedPath: "estimated management path from entry to current risk decision",
+        },
+        exit_review: {
+          entry: "original or average entry for the long position under review",
+          current: "latest CoinMarketCap live quote for the sell review",
+          stop: "exit or reduction trigger for the existing long position",
+          takeProfit: "dynamic exit reference for protecting gains",
+          estimatedPath: "estimated exit-review path for a long position",
+        },
       },
       sourceLabels: {
         userInput: "User input",
@@ -276,6 +352,34 @@ export const translations = {
         "ATR is unavailable or estimated, so percent-based stop fallback is used.",
       "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.":
         "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.",
+      "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.":
+        "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.",
+      "Validate a planned long entry against risk, stop distance, trend, liquidity, and confirmation.":
+        "Validate a planned long entry against risk, stop distance, trend, liquidity, and confirmation.",
+      "Manage the existing long position; do not add exposure while price is below the stop.":
+        "Manage the existing long position; do not add exposure while price is below the stop.",
+      "Manage an existing long position with hold, reduce, wait, or trailing-exit conditions.":
+        "Manage an existing long position with hold, reduce, wait, or trailing-exit conditions.",
+      "Review whether the existing long position should be reduced or exited.":
+        "Review whether the existing long position should be reduced or exited.",
+      "Wait for the selected timeframe to confirm the setup before adding exposure.":
+        "Wait for the selected timeframe to confirm the setup before adding exposure.",
+      "Confirm whether the stop breach persists on the selected timeframe before deciding reduce or exit.":
+        "Confirm whether the stop breach persists on the selected timeframe before deciding reduce or exit.",
+      "Review support, stop distance, and trailing-exit behavior before increasing or reducing exposure.":
+        "Review support, stop distance, and trailing-exit behavior before increasing or reducing exposure.",
+      "Check stop, support, trailing-exit protection, and market context before deciding to reduce or exit.":
+        "Check stop, support, trailing-exit protection, and market context before deciding to reduce or exit.",
+      "Analyze entry mode sizes a possible new long position from capital, defined risk, and stop distance.":
+        "Analyze entry mode sizes a possible new long position from capital, defined risk, and stop distance.",
+      "Open-position management uses your existing holdings. It does not calculate a fresh buy or add exposure automatically.":
+        "Open-position management uses your existing holdings. It does not calculate a fresh buy or add exposure automatically.",
+      "Exit review is a long-position risk review. It helps decide hold, reduce, or exit; it is not short selling.":
+        "Exit review is a long-position risk review. It helps decide hold, reduce, or exit; it is not short selling.",
+      "A breached stop means the position is no longer healthy under this risk model. This is not a fresh entry setup.":
+        "A breached stop means the position is no longer healthy under this risk model. This is not a fresh entry setup.",
+      "Sell review means protecting an existing long position. It does not open a short position or execute a sale.":
+        "Sell review means protecting an existing long position. It does not open a short position or execute a sale.",
     },
     decisionCopy: {
       autoWhy: "Auto Recommended selected the strongest fit for the current context:",
@@ -283,6 +387,23 @@ export const translations = {
       manualCaution: "The selected strategy is being evaluated, but it needs more confirmation before it is clean.",
       manualNoTrade:
         "The selected strategy is being evaluated, but the risk engine currently recommends no-trade conditions.",
+    },
+    intentDecisionCopy: {
+      analyze_entry: {
+        prefix: "Entry analysis:",
+        nextConfirmation: "",
+        beginnerExplanation: "",
+      },
+      manage_open_position: {
+        prefix: "Open-position management:",
+        nextConfirmation: "Watch whether holding remains valid, whether reducing risk is cleaner, or whether the trailing exit should guide the next decision.",
+        beginnerExplanation: "This view is for managing an existing position. It does not place orders or tell you to add exposure automatically.",
+      },
+      exit_review: {
+        prefix: "Exit review:",
+        nextConfirmation: "Check stop, trailing exit, support loss, risk, and market context before deciding whether reducing or exiting is cleaner.",
+        beginnerExplanation: "Exit review focuses on reducing risk or leaving a position when the setup weakens. It does not execute a sale.",
+      },
     },
     nextConfirmationMessages: {
       trend_following_pullback: "Wait for the selected timeframe to close above support or the trend filter.",
@@ -300,10 +421,13 @@ export const translations = {
       tokenList: "Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
       eligibleToken:
         "Choose the crypto asset you want to analyze. Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
+      positionIntent:
+        "Choose whether you want to analyze a possible entry, manage an existing position, or review exit and reduction conditions.",
       entryPrice: "The price where you bought, or the price where you are considering entering.",
       positionSize: "Calculated token quantity for this risk setup.",
       totalCapital: "Your capital base for calculating risk-based position size.",
       calculatedPositionSize: "Readonly size calculated from capital, risk, entry price, ATR, and stop distance.",
+      currentPositionSize: "How many tokens or coins are currently held in the existing long position.",
       strategyTimeframe:
         "Choose the timeframe used to evaluate the setup. Shorter timeframes are more speculative and require stronger confirmation; higher timeframes are better for patient position decisions.",
       strategyMode:
@@ -380,9 +504,13 @@ export const translations = {
     beginner: "Principiante",
     advanced: "Avanzado",
     eligibleToken: "Token elegible",
+    positionIntent: "Intención de posición",
     entryPrice: "Precio de entrada",
     positionSize: "Tamaño de posición",
     totalCapital: "Capital total",
+    currentPositionSize: "Tamaño actual de la posición",
+    currentPositionSizeHelper: "Tenencias existentes usadas para medir el riesgo de la posición abierta contra el stop.",
+    existingPositionRisk: "Riesgo estimado de la posición existente",
     calculatedPositionSize: "Tamaño de posición calculado",
     calculatedPositionSizeHelper: "Calculado con capital, riesgo, precio de entrada, ATR y distancia al stop.",
     strategyTimeframe: "Temporalidad de estrategia",
@@ -434,6 +562,13 @@ export const translations = {
     strategyEvaluated: "Estrategia evaluada",
     selectedStrategy: "Estrategia seleccionada",
     riskVerdict: "Veredicto de riesgo",
+    intentAction: "Acción de intención",
+    stopStatus: "Estado del stop",
+    suggestedAction: "Acción sugerida:",
+    addExposureAllowed: "Agregar exposición permitido",
+    reduceOrExitRecommended: "Reducir/salir recomendado",
+    yes: "Sí",
+    no: "No",
     fit: "Ajuste",
     selectedBy: "Seleccionado por",
     auto: "Auto",
@@ -441,6 +576,8 @@ export const translations = {
     estimatedRisk: "Riesgo estimado",
     dataSource: "Fuente de datos",
     whyThisStrategy: "¿Por qué esta estrategia?",
+    entryCondition: "Condición de entrada:",
+    decisionCondition: "Condición de decisión:",
     nextConfirmation: "Próxima confirmación:",
     beginnerNote: "Nota para principiantes:",
     noTradeReason: "Razón para no operar",
@@ -485,6 +622,41 @@ export const translations = {
     positionSizeFallbackWarning: "La distancia al stop no era válida, así que PositionSight usó el fallback por porcentaje.",
     stopLossClampedWarning: "El stop basado en ATR quedaría en cero o menos, así que se ajustó a un nivel positivo seguro.",
     positionSizeInvalidWarning: "El tamaño de posición calculado no está disponible. Revisa capital, riesgo, entrada y distancia al stop.",
+    stopBreachWarning:
+      "El precio actual está por debajo del stop. Revisa salida/riesgo inmediatamente; esto no es una entrada nueva.",
+    intentEntryPriceLabels: {
+      analyze_entry: "Precio de entrada planeado",
+      manage_open_position: "Precio promedio de entrada",
+      exit_review: "Precio original de entrada",
+    },
+    intentEntryPriceTooltips: {
+      analyze_entry: "El precio donde estás considerando una entrada long planeada.",
+      manage_open_position: "Tu precio promedio de entrada para la posición long existente.",
+      exit_review: "El precio original o promedio de entrada para la posición long que estás revisando.",
+    },
+    intentActionLabels: {
+      evaluate_entry: "Evaluar entrada",
+      wait_for_confirmation: "Esperar confirmación",
+      hold_with_trailing_exit: "Mantener con salida dinámica",
+      reduce_risk: "Reducir riesgo",
+      exit_or_reduce: "Salir o reducir",
+      stop_breached: "Stop perdido",
+      no_trade: "No operar",
+    },
+    intentSuggestedActionLabels: {
+      evaluate_entry: "Entrada permitida solo si la confirmación sigue siendo válida.",
+      wait_for_confirmation: "Espera confirmación antes de agregar exposición.",
+      hold_with_trailing_exit: "Mantener con salida dinámica mientras tendencia y soporte sigan válidos.",
+      reduce_risk: "Reduce riesgo o mantén solo si soporte y salida dinámica siguen válidos.",
+      exit_or_reduce: "Revisa salida o reducción de la posición long existente.",
+      stop_breached: "Stop perdido. Revisa salida o reducción de riesgo inmediatamente.",
+      no_trade: "No agregues exposición. Protege capital hasta que el setup mejore.",
+    },
+    stopStatusLabels: {
+      above_stop: "Sobre el stop",
+      near_stop: "Cerca del stop",
+      stop_breached: "Stop perdido",
+    },
     fitLabels: {
       good: "Bueno",
       caution: "Precaución",
@@ -495,6 +667,11 @@ export const translations = {
       needs_confirmation: "Necesita confirmación",
       poor_fit: "Ajuste débil",
       no_trade_recommended: "No operar recomendado",
+    },
+    positionIntentLabels: {
+      analyze_entry: "Analizar entrada",
+      manage_open_position: "Gestionar posición abierta",
+      exit_review: "Revisar salida / venta",
     },
     chartLabels: {
       stop: "Stop",
@@ -519,6 +696,29 @@ export const translations = {
         stop: "nivel de control de riesgo",
         takeProfit: "módulo trailing ATR/MA",
         estimatedPath: "ruta visual estimada hasta integrar OHLCV histórico",
+      },
+      intentMeanings: {
+        analyze_entry: {
+          entry: "precio de entrada long planeada",
+          current: "cotización más reciente en vivo desde CoinMarketCap",
+          stop: "stop de riesgo para la entrada planeada",
+          takeProfit: "referencia inicial de salida dinámica si la entrada confirma",
+          estimatedPath: "ruta estimada del setup hasta que OHLCV histórico esté disponible",
+        },
+        manage_open_position: {
+          entry: "entrada promedio de la posición long existente",
+          current: "cotización CoinMarketCap en vivo para la posición abierta",
+          stop: "stop de riesgo de la posición long existente",
+          takeProfit: "referencia de salida dinámica para gestionar la posición",
+          estimatedPath: "ruta estimada de gestión desde entrada hasta decisión de riesgo actual",
+        },
+        exit_review: {
+          entry: "entrada original o promedio de la posición long en revisión",
+          current: "cotización CoinMarketCap en vivo para revisar salida",
+          stop: "disparador de salida o reducción de la posición long existente",
+          takeProfit: "referencia de salida dinámica para proteger ganancias",
+          estimatedPath: "ruta estimada de revisión de salida para una posición long",
+        },
       },
       sourceLabels: {
         userInput: "Dato del usuario",
@@ -640,6 +840,34 @@ export const translations = {
         "ATR no está disponible o es estimado, así que se usa el fallback de stop por porcentaje.",
       "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.":
         "El stop basado en ATR quedaría en cero o menos, así que se ajustó a un nivel positivo seguro.",
+      "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.":
+        "El precio actual está por debajo del stop. Revisa salida/riesgo inmediatamente; esto no es una entrada nueva.",
+      "Validate a planned long entry against risk, stop distance, trend, liquidity, and confirmation.":
+        "Valida una entrada long planeada contra riesgo, distancia al stop, tendencia, liquidez y confirmación.",
+      "Manage the existing long position; do not add exposure while price is below the stop.":
+        "Gestiona la posición long existente; no agregues exposición mientras el precio esté debajo del stop.",
+      "Manage an existing long position with hold, reduce, wait, or trailing-exit conditions.":
+        "Gestiona una posición long existente con condiciones de mantener, reducir, esperar o salida dinámica.",
+      "Review whether the existing long position should be reduced or exited.":
+        "Revisa si la posición long existente debe reducirse o cerrarse.",
+      "Wait for the selected timeframe to confirm the setup before adding exposure.":
+        "Espera que la temporalidad seleccionada confirme el setup antes de agregar exposición.",
+      "Confirm whether the stop breach persists on the selected timeframe before deciding reduce or exit.":
+        "Confirma si la pérdida del stop persiste en la temporalidad seleccionada antes de decidir reducir o salir.",
+      "Review support, stop distance, and trailing-exit behavior before increasing or reducing exposure.":
+        "Revisa soporte, distancia al stop y comportamiento de salida dinámica antes de aumentar o reducir exposición.",
+      "Check stop, support, trailing-exit protection, and market context before deciding to reduce or exit.":
+        "Revisa stop, soporte, protección de salida dinámica y contexto de mercado antes de decidir reducir o salir.",
+      "Analyze entry mode sizes a possible new long position from capital, defined risk, and stop distance.":
+        "El modo Analizar entrada dimensiona una posible nueva posición long desde capital, riesgo definido y distancia al stop.",
+      "Open-position management uses your existing holdings. It does not calculate a fresh buy or add exposure automatically.":
+        "La gestión de posición abierta usa tus tenencias existentes. No calcula una compra nueva ni agrega exposición automáticamente.",
+      "Exit review is a long-position risk review. It helps decide hold, reduce, or exit; it is not short selling.":
+        "La revisión de salida es una revisión de riesgo de una posición long. Ayuda a decidir mantener, reducir o salir; no es venta en corto.",
+      "A breached stop means the position is no longer healthy under this risk model. This is not a fresh entry setup.":
+        "Un stop perdido significa que la posición ya no está sana bajo este modelo de riesgo. Esto no es un setup de entrada nueva.",
+      "Sell review means protecting an existing long position. It does not open a short position or execute a sale.":
+        "La revisión de venta significa proteger una posición long existente. No abre una posición corta ni ejecuta una venta.",
     },
     decisionCopy: {
       autoWhy: "Auto recomendado eligió el mejor ajuste para el contexto actual:",
@@ -647,6 +875,23 @@ export const translations = {
       manualCaution: "La estrategia seleccionada se está evaluando, pero necesita más confirmación antes de estar limpia.",
       manualNoTrade:
         "La estrategia seleccionada se está evaluando, pero el motor de riesgo actualmente recomienda condiciones de no operar.",
+    },
+    intentDecisionCopy: {
+      analyze_entry: {
+        prefix: "Análisis de entrada:",
+        nextConfirmation: "",
+        beginnerExplanation: "",
+      },
+      manage_open_position: {
+        prefix: "Gestión de posición abierta:",
+        nextConfirmation: "Observa si mantener sigue siendo válido, si reducir riesgo es más limpio o si la salida dinámica debe guiar la siguiente decisión.",
+        beginnerExplanation: "Esta vista sirve para gestionar una posición existente. No coloca órdenes ni te indica agregar exposición automáticamente.",
+      },
+      exit_review: {
+        prefix: "Revisión de salida:",
+        nextConfirmation: "Revisa stop, salida dinámica, pérdida de soporte, riesgo y contexto de mercado antes de decidir si reducir o salir es más limpio.",
+        beginnerExplanation: "La revisión de salida se enfoca en reducir riesgo o salir de una posición cuando el setup se debilita. No ejecuta una venta.",
+      },
     },
     nextConfirmationMessages: {
       trend_following_pullback: "Espera un cierre de la temporalidad seleccionada sobre soporte o el filtro de tendencia.",
@@ -664,10 +909,13 @@ export const translations = {
       tokenList: "Modo Principiante muestra una lista más corta; Avanzado muestra más tokens soportados por el hackathon.",
       eligibleToken:
         "Elige el criptoactivo que quieres analizar. Principiante muestra una lista corta; Avanzado muestra más tokens soportados por el hackathon.",
+      positionIntent:
+        "Elige si quieres analizar una posible entrada, gestionar una posición existente o revisar condiciones de salida y reducción.",
       entryPrice: "El precio donde compraste, o el precio donde estás considerando entrar.",
       positionSize: "Cantidad calculada de tokens para este setup de riesgo.",
       totalCapital: "Tu base de capital para calcular el tamaño de posición según riesgo.",
       calculatedPositionSize: "Tamaño readonly calculado con capital, riesgo, precio de entrada, ATR y distancia al stop.",
+      currentPositionSize: "Cuántos tokens o monedas mantienes actualmente en la posición long existente.",
       strategyTimeframe:
         "Elige la temporalidad para evaluar la estrategia. Temporalidades cortas son más especulativas y requieren más confirmación; temporalidades altas son mejores para decisiones más pacientes.",
       strategyMode:
