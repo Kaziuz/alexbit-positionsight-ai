@@ -8,7 +8,7 @@ Open the app with `npm run dev` and go to `http://localhost:3000`.
 
 PositionSight AI is a beginner-friendly crypto strategy skill. It does not trade or connect wallets. It turns a user position plus CMC-ready market context into an explainable strategy and backtest-ready JSON.
 
-If `CMC_API_KEY` is configured, the app uses CoinMarketCap live quote data. Otherwise, it safely falls back to mock data.
+If `CMC_API_KEY` is configured, the app uses CoinMarketCap live quote data. It also attempts CoinMarketCap historical OHLCV for the chart and indicators. If OHLCV is unavailable because of the response or plan, the app clearly labels the chart as estimated.
 
 ### 0:15 - 0:30: Language Toggle
 
@@ -23,12 +23,13 @@ Use the default state:
 - Token mode: `Beginner`
 - Token: `AVAX`
 - Entry price: `34`
-- Position size: `2`
+- Total capital: `1000`
+- Calculated position size: shown as read-only
 - Strategy Timeframe: `1d`
 - Strategy mode: `Auto Recommended`
-- Max risk: `3%`
+- Max risk: `1%`
 
-Show the chart levels: stop loss, invalidation, entry, current price, and take profit. Change the strategy timeframe once to show that the estimated projection path changes. Then point to the market context card: trend, RSI, ATR, sentiment, liquidity, and derivatives bias. Explain that CoinMarketCap latest quote can be live, while the chart projection and some advanced context fields are estimated until historical OHLCV is integrated.
+Show the chart levels: stop loss, entry, current price, and trailing exit. Invalidation remains in the JSON export for backtesting, but it is hidden from the beginner chart. If CoinMarketCap historical OHLCV is available, point out that indicators can be calculated from historical candles. If it is unavailable, explain that the chart path is estimated and clearly labeled. Then point to the market context card: history source, MA 20/50/200, RSI, ATR, average volume, support, resistance, sentiment, liquidity, and derivatives bias.
 
 ### 0:55 - 1:15: Strategy Explanation Cards
 
@@ -59,10 +60,10 @@ Select `FET`.
 Set:
 
 - Entry price: `1.37`
-- Position size: `100`
+- Total capital: `1000`
 - Strategy Timeframe: `1d`
 - Strategy mode: `Auto Recommended`
-- Max risk: `3%`
+- Max risk: `1%`
 
 FET has bullish estimated trend context, breakout-style close position, stronger momentum, supportive buy pressure, and positive sentiment. Use this to explain breakout + retest logic.
 
@@ -91,10 +92,14 @@ The export includes:
 - execution assumptions
 - evaluation metrics
 
-Close by noting that the export records whether the quote source was CoinMarketCap live data or mock fallback.
+Close by noting that the export records whether the latest quote source was CoinMarketCap live data and whether historical candles came from CoinMarketCap OHLCV or estimated fallback.
+
+Also point out that the export keeps `takeProfit` for backtest compatibility, while the beginner UI frames that level as a trailing-exit reference.
 
 ## Timeframe Note
 
 PositionSight supports `15m`, `30m`, `1h`, `1d`, `1w`, and `1mo`.
 
 Intraday timeframes are available for testing and strategy research, but the app treats them with more caution and requires stronger confirmation. The demo should emphasize that PositionSight does not encourage overtrading, and that higher timeframes are usually better for patient, risk-first position decisions.
+
+Selecting `15m`, `30m`, or `1h` should show the intraday warning. Risk above `1%` should show the capital-preservation warning.

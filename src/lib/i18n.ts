@@ -18,6 +18,9 @@ export const translations = {
     eligibleToken: "Eligible token",
     entryPrice: "Entry price",
     positionSize: "Position size",
+    totalCapital: "Total capital",
+    calculatedPositionSize: "Calculated position size",
+    calculatedPositionSizeHelper: "Calculated from capital, risk, entry price, ATR, and stop distance.",
     strategyTimeframe: "Strategy Timeframe",
     strategyMode: "Strategy mode",
     maxRiskPercentage: "Max risk percentage",
@@ -44,6 +47,19 @@ export const translations = {
     positionValue: "Position value",
     marketContext: "Market context",
     estimatedContextFields: "CoinMarketCap live quote; estimated context fields",
+    historySource: "History Source",
+    coinMarketCapHistoricalOhlcv: "Historical candles from CoinMarketCap",
+    coinMarketCapHistoricalShort: "CoinMarketCap historical",
+    estimatedHistory: "Estimated candles from live quote context",
+    estimatedCandlesShort: "Estimated candles",
+    latestAndHistoryFromCmc: "Latest quote and historical candles come from CoinMarketCap.",
+    latestLiveHistoryEstimated:
+      "The latest quote is live from CoinMarketCap. The chart path and some indicators are estimated until historical OHLCV is available.",
+    notEnoughHistory: "Not enough history",
+    averageVolume: "Average Volume",
+    avgVolume: "Avg Volume",
+    support: "Support",
+    resistance: "Resistance",
     trend: "Trend",
     sentiment: "Sentiment",
     liquidity: "Liquidity",
@@ -52,6 +68,7 @@ export const translations = {
     strategySignal: "Strategy signal",
     strategyType: "Strategy type",
     strategyEvaluated: "Strategy evaluated",
+    selectedStrategy: "Selected strategy",
     riskVerdict: "Risk verdict",
     fit: "Fit",
     selectedBy: "Selected by",
@@ -66,10 +83,14 @@ export const translations = {
     warnings: "Warnings",
     stopLoss: "Stop loss",
     takeProfit: "Take profit",
+    trailingExit: "Trailing exit",
+    trailingExitHelper: "ATR/MA trailing module",
     chartDataNotes: {
-      live:
-        "CoinMarketCap latest quote is live. The chart path and advanced context are estimated until historical OHLCV is added.",
+      live: "Chart path is estimated until historical OHLCV is available.",
       mock: "Demo fallback data is being used because the live CoinMarketCap quote is unavailable.",
+      history: "Latest quote and historical candles come from CoinMarketCap.",
+      estimatedHistory:
+        "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.",
     },
     backtestReadyJson: "Backtest-ready JSON",
     exportJson: "Export JSON",
@@ -89,6 +110,17 @@ export const translations = {
     and: "and",
     entryDistanceWarning: "Entry price is very far from current price. This may be an old position or a typo.",
     useValidDecimals: "Use dot or comma for decimals, but values must be valid numbers.",
+    totalCapitalGreaterThanZero: "Total capital must be greater than 0.",
+    calculatedPositionSizeUnavailable: "Calculated position size is unavailable. Check capital, risk, entry, and stop distance.",
+    intradayTradingWarning:
+      "Intraday trading is more speculative and often dominated by noise. PositionSight recommends validating this setup on the daily timeframe before acting.",
+    riskAboveOneWarning:
+      "Risk above 1% is aggressive for this risk-first model. Consider reducing risk before entering.",
+    atrFallbackWarning: "ATR is unavailable, so PositionSight is using the percent-based stop fallback.",
+    positionSizeEstimatedWarning: "Position size uses estimated ATR until historical OHLCV is available.",
+    positionSizeFallbackWarning: "Stop distance was invalid, so PositionSight used the percent-based fallback.",
+    stopLossClampedWarning: "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.",
+    positionSizeInvalidWarning: "Calculated position size is unavailable. Check capital, risk, entry, and stop distance.",
     fitLabels: {
       good: "Good",
       caution: "Caution",
@@ -105,22 +137,49 @@ export const translations = {
       invalidation: "Invalidation",
       entry: "Entry",
       current: "Current",
-      takeProfit: "Take Profit",
+      takeProfit: "Trailing Exit",
       price: "Price",
+      asset: "Asset",
+      timeframe: "Timeframe",
+      point: "Point",
+      time: "Time",
+      close: "Close",
+      distanceFromEntry: "Distance from entry",
+      source: "Source",
       estimatedProjection: "Estimated projection",
+      estimatedPath: "Estimated strategy path",
+      meaning: "Meaning",
+      meanings: {
+        entry: "user entry or planned entry",
+        current: "latest CoinMarketCap live quote",
+        stop: "risk control level",
+        takeProfit: "ATR/MA trailing module",
+        estimatedPath: "estimated visual path until historical OHLCV is available",
+      },
+      sourceLabels: {
+        userInput: "User input",
+        coinMarketCapLiveQuote: "CoinMarketCap live quote",
+        strategyEngine: "Strategy engine",
+        estimatedStrategyPath: "Estimated strategy path",
+      },
       pointType: "Point type",
       pointTypes: {
-        historical_estimate: "Historical estimate",
+        historical_ohlcv: "historical candle",
+        historical_estimate: "estimated candle",
         live_quote: "Current live quote",
         strategy_projection: "Strategy projection",
+      },
+      sources: {
+        coinmarketcap: "CoinMarketCap historical OHLCV",
+        estimated: "Estimated strategy path",
       },
       timeLabels: {
         "15m": ["-45m", "-30m", "Now", "+15m", "+30m"],
         "30m": ["-90m", "-60m", "Now", "+30m", "+1h"],
         "1h": ["-3h", "-2h", "Now", "+1h", "+2h"],
         "1d": ["-3d", "-1d", "Today", "+1d", "+2d"],
-        "1w": ["-3w", "-1w", "Today", "+1w", "+2w"],
-        "1mo": ["-3mo", "-1mo", "Today", "+1mo", "+2mo"],
+        "1w": ["4w ago", "2w ago", "Today", "+1w", "+2w"],
+        "1mo": ["3mo ago", "1mo ago", "Today", "+1mo", "+2mo"],
       },
     },
     trendStateLabels: {
@@ -147,12 +206,18 @@ export const translations = {
     },
     messageTranslations: {
       "Mock market context is unavailable.": "Demo market context is unavailable.",
+      "Historical OHLCV is unavailable with the current CoinMarketCap response or plan; chart path is estimated from live quote context.":
+        "Historical OHLCV is unavailable with the current CoinMarketCap response or plan; chart path is estimated from live quote context.",
+      "Historical OHLCV is unavailable with the current CoinMarketCap plan; chart path and indicators are estimated.":
+        "Historical OHLCV is unavailable with the current CoinMarketCap plan; chart path and indicators are estimated.",
+      "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.":
+        "The latest quote is live from CoinMarketCap. The chart path and some indicators are estimated until historical OHLCV is available.",
       "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are proxy fields until future integrations.":
-        "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+        "The latest quote is live from CoinMarketCap. The chart path and some indicators are estimated until historical OHLCV is available.",
       "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are mock/proxy fields.":
-        "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+        "The latest quote is live from CoinMarketCap. The chart path and some indicators are estimated until historical OHLCV is available.",
       "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.":
-        "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+        "Latest quote is live from CoinMarketCap. Candles and indicators are estimated until historical OHLCV is available on the current plan.",
       "Using mock data fallback because CoinMarketCap live quote is unavailable.":
         "Demo fallback data is being used because the live CoinMarketCap quote is unavailable.",
       "Configured risk is too high for a capital-preservation strategy.":
@@ -191,6 +256,26 @@ export const translations = {
         "Auto mode sees a possible setup, but Risk Check is still valid for conservative traders.",
       "Risk or market structure is unclear for this selected strategy.":
         "Risk or market structure is unclear for this selected strategy.",
+      "Not enough historical candles to calculate ema20.":
+        "Not enough history to calculate MA 20.",
+      "Not enough historical candles to calculate ema50.":
+        "Not enough history to calculate MA 50.",
+      "Not enough historical candles to calculate ema200.":
+        "Not enough history to calculate MA 200.",
+      "Not enough historical candles to calculate rsi14.":
+        "Not enough history to calculate RSI 14.",
+      "Not enough historical candles to calculate atr14.":
+        "Not enough history to calculate ATR 14.",
+      "Not enough historical candles to calculate averageVolume.":
+        "Not enough history to calculate average volume.",
+      "Not enough historical candles to calculate support.":
+        "Not enough history to calculate support.",
+      "Not enough historical candles to calculate resistance.":
+        "Not enough history to calculate resistance.",
+      "ATR is unavailable or estimated, so percent-based stop fallback is used.":
+        "ATR is unavailable or estimated, so percent-based stop fallback is used.",
+      "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.":
+        "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.",
     },
     decisionCopy: {
       autoWhy: "Auto Recommended selected the strongest fit for the current context:",
@@ -216,7 +301,9 @@ export const translations = {
       eligibleToken:
         "Choose the crypto asset you want to analyze. Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
       entryPrice: "The price where you bought, or the price where you are considering entering.",
-      positionSize: "How many tokens or coins you hold or plan to buy. This is used to estimate risk.",
+      positionSize: "Calculated token quantity for this risk setup.",
+      totalCapital: "Your capital base for calculating risk-based position size.",
+      calculatedPositionSize: "Readonly size calculated from capital, risk, entry price, ATR, and stop distance.",
       strategyTimeframe:
         "Choose the timeframe used to evaluate the setup. Shorter timeframes are more speculative and require stronger confirmation; higher timeframes are better for patient position decisions.",
       strategyMode:
@@ -257,7 +344,7 @@ export const translations = {
         simple: "Looks for a setup where the market is showing enough strength to continue after confirmation.",
         bestUsedWhen: "Best when price is above support, trend is healthy, and risk is controlled.",
         avoidWhen: "Avoid when price is too extended or sentiment/liquidity are weak.",
-        checks: "Checks trend, support, EMA estimate, RSI estimate, and risk.",
+        checks: "Checks trend, support, MA estimate, RSI estimate, and risk.",
         beginnerNote: "This mode waits for evidence instead of guessing the bottom.",
       },
       breakout_retest: {
@@ -295,6 +382,9 @@ export const translations = {
     eligibleToken: "Token elegible",
     entryPrice: "Precio de entrada",
     positionSize: "Tamaño de posición",
+    totalCapital: "Capital total",
+    calculatedPositionSize: "Tamaño de posición calculado",
+    calculatedPositionSizeHelper: "Calculado con capital, riesgo, precio de entrada, ATR y distancia al stop.",
     strategyTimeframe: "Temporalidad de estrategia",
     strategyMode: "Modo de estrategia",
     maxRiskPercentage: "Porcentaje máximo de riesgo",
@@ -321,6 +411,19 @@ export const translations = {
     positionValue: "Valor de posición",
     marketContext: "Contexto de mercado",
     estimatedContextFields: "Cotización CoinMarketCap en vivo; campos de contexto estimado",
+    historySource: "Fuente histórica",
+    coinMarketCapHistoricalOhlcv: "Velas históricas de CoinMarketCap",
+    coinMarketCapHistoricalShort: "Histórico CoinMarketCap",
+    estimatedHistory: "Velas estimadas desde la cotización en vivo",
+    estimatedCandlesShort: "Velas estimadas",
+    latestAndHistoryFromCmc: "La cotización más reciente y las velas históricas vienen desde CoinMarketCap.",
+    latestLiveHistoryEstimated:
+      "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y algunos indicadores se estiman hasta que el plan permita OHLCV histórico.",
+    notEnoughHistory: "Historial insuficiente",
+    averageVolume: "Volumen promedio",
+    avgVolume: "Vol. promedio",
+    support: "Soporte",
+    resistance: "Resistencia",
     trend: "Tendencia",
     sentiment: "Sentimiento",
     liquidity: "Liquidez",
@@ -329,6 +432,7 @@ export const translations = {
     strategySignal: "Señal de estrategia",
     strategyType: "Tipo de estrategia",
     strategyEvaluated: "Estrategia evaluada",
+    selectedStrategy: "Estrategia seleccionada",
     riskVerdict: "Veredicto de riesgo",
     fit: "Ajuste",
     selectedBy: "Seleccionado por",
@@ -343,10 +447,14 @@ export const translations = {
     warnings: "Advertencias",
     stopLoss: "Stop loss",
     takeProfit: "Toma de ganancia",
+    trailingExit: "Salida dinámica",
+    trailingExitHelper: "Módulo trailing ATR/MA",
     chartDataNotes: {
-      live:
-        "La cotización más reciente de CoinMarketCap está en vivo. El recorrido del gráfico y el contexto avanzado son estimados hasta integrar OHLCV histórico.",
+      live: "El recorrido del gráfico es estimado hasta que OHLCV histórico esté disponible.",
       mock: "Se están usando datos demo porque la cotización en vivo de CoinMarketCap no está disponible.",
+      history: "La cotización más reciente y las velas históricas vienen desde CoinMarketCap.",
+      estimatedHistory:
+        "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y los indicadores son estimados hasta que el plan permita OHLCV histórico.",
     },
     backtestReadyJson: "JSON listo para backtesting",
     exportJson: "Exportar JSON",
@@ -366,6 +474,17 @@ export const translations = {
     and: "y",
     entryDistanceWarning: "El precio de entrada está muy lejos del precio actual. Puede ser una posición antigua o un error.",
     useValidDecimals: "Usa punto o coma para decimales, pero los valores deben ser números válidos.",
+    totalCapitalGreaterThanZero: "El capital total debe ser mayor que 0.",
+    calculatedPositionSizeUnavailable: "El tamaño de posición calculado no está disponible. Revisa capital, riesgo, entrada y distancia al stop.",
+    intradayTradingWarning:
+      "Las temporalidades intradía son más especulativas y suelen estar dominadas por ruido técnico. PositionSight recomienda validar este setup en temporalidad diaria antes de actuar.",
+    riskAboveOneWarning:
+      "Un riesgo superior al 1% es agresivo para este modelo centrado en protección de capital. Considera reducir el riesgo antes de entrar.",
+    atrFallbackWarning: "ATR no está disponible, así que PositionSight usa el fallback de stop por porcentaje.",
+    positionSizeEstimatedWarning: "El tamaño de posición usa ATR estimado hasta que OHLCV histórico esté disponible.",
+    positionSizeFallbackWarning: "La distancia al stop no era válida, así que PositionSight usó el fallback por porcentaje.",
+    stopLossClampedWarning: "El stop basado en ATR quedaría en cero o menos, así que se ajustó a un nivel positivo seguro.",
+    positionSizeInvalidWarning: "El tamaño de posición calculado no está disponible. Revisa capital, riesgo, entrada y distancia al stop.",
     fitLabels: {
       good: "Bueno",
       caution: "Precaución",
@@ -382,22 +501,49 @@ export const translations = {
       invalidation: "Invalidación",
       entry: "Entrada",
       current: "Actual",
-      takeProfit: "Toma de ganancia",
+      takeProfit: "Salida dinámica",
       price: "Precio",
+      asset: "Activo",
+      timeframe: "Temporalidad",
+      point: "Punto",
+      time: "Hora/fecha",
+      close: "Cierre",
+      distanceFromEntry: "Distancia desde entrada",
+      source: "Fuente",
       estimatedProjection: "Proyección estimada",
+      estimatedPath: "Ruta estimada de estrategia",
+      meaning: "Significado",
+      meanings: {
+        entry: "entrada del usuario o entrada planeada",
+        current: "cotización más reciente en vivo desde CoinMarketCap",
+        stop: "nivel de control de riesgo",
+        takeProfit: "módulo trailing ATR/MA",
+        estimatedPath: "ruta visual estimada hasta integrar OHLCV histórico",
+      },
+      sourceLabels: {
+        userInput: "Dato del usuario",
+        coinMarketCapLiveQuote: "Cotización CoinMarketCap en vivo",
+        strategyEngine: "Motor de estrategia",
+        estimatedStrategyPath: "Ruta estimada de estrategia",
+      },
       pointType: "Tipo de punto",
       pointTypes: {
-        historical_estimate: "Estimación histórica",
+        historical_ohlcv: "vela histórica",
+        historical_estimate: "vela estimada",
         live_quote: "Cotización actual en vivo",
         strategy_projection: "Proyección de estrategia",
+      },
+      sources: {
+        coinmarketcap: "OHLCV histórico CoinMarketCap",
+        estimated: "ruta estimada de estrategia",
       },
       timeLabels: {
         "15m": ["-45m", "-30m", "Ahora", "+15m", "+30m"],
         "30m": ["-90m", "-60m", "Ahora", "+30m", "+1h"],
         "1h": ["-3h", "-2h", "Ahora", "+1h", "+2h"],
         "1d": ["-3d", "-1d", "Hoy", "+1d", "+2d"],
-        "1w": ["-3sem", "-1sem", "Hoy", "+1sem", "+2sem"],
-        "1mo": ["-3mes", "-1mes", "Hoy", "+1mes", "+2mes"],
+        "1w": ["hace 4sem", "hace 2sem", "Hoy", "+1sem", "+2sem"],
+        "1mo": ["hace 3mes", "hace 1mes", "Hoy", "+1mes", "+2mes"],
       },
     },
     trendStateLabels: {
@@ -424,12 +570,18 @@ export const translations = {
     },
     messageTranslations: {
       "Mock market context is unavailable.": "El contexto de mercado demo no está disponible.",
+      "Historical OHLCV is unavailable with the current CoinMarketCap response or plan; chart path is estimated from live quote context.":
+        "El OHLCV histórico no está disponible con la respuesta o plan actual de CoinMarketCap; el recorrido del gráfico se estima desde la cotización en vivo.",
+      "Historical OHLCV is unavailable with the current CoinMarketCap plan; chart path and indicators are estimated.":
+        "El OHLCV histórico no está disponible con el plan actual de CoinMarketCap; el recorrido del gráfico y los indicadores son estimados.",
+      "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.":
+        "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y algunos indicadores se estiman hasta que el plan permita OHLCV histórico.",
       "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are proxy fields until future integrations.":
-        "La cotización más reciente de CoinMarketCap está en vivo. Algunos campos avanzados son estimados hasta integrar OHLCV histórico.",
+        "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y algunos indicadores se estiman hasta que el plan permita OHLCV histórico.",
       "CoinMarketCap latest quote is live; technicals, sentiment, order book, and derivatives are mock/proxy fields.":
-        "La cotización más reciente de CoinMarketCap está en vivo. Algunos campos avanzados son estimados hasta integrar OHLCV histórico.",
+        "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y algunos indicadores se estiman hasta que el plan permita OHLCV histórico.",
       "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.":
-        "La cotización más reciente de CoinMarketCap está en vivo. Algunos campos avanzados son estimados hasta integrar OHLCV histórico.",
+        "La cotización más reciente viene en vivo desde CoinMarketCap. Las velas y los indicadores son estimados hasta que el plan permita OHLCV histórico.",
       "Using mock data fallback because CoinMarketCap live quote is unavailable.":
         "Se están usando datos demo porque la cotización en vivo de CoinMarketCap no está disponible.",
       "Configured risk is too high for a capital-preservation strategy.":
@@ -468,6 +620,26 @@ export const translations = {
         "El modo Auto ve un posible setup, pero Revisión de riesgo sigue siendo válida para perfiles conservadores.",
       "Risk or market structure is unclear for this selected strategy.":
         "El riesgo o la estructura de mercado no están claros para esta estrategia seleccionada.",
+      "Not enough historical candles to calculate ema20.":
+        "Historial insuficiente para calcular MA 20.",
+      "Not enough historical candles to calculate ema50.":
+        "Historial insuficiente para calcular MA 50.",
+      "Not enough historical candles to calculate ema200.":
+        "Historial insuficiente para calcular MA 200.",
+      "Not enough historical candles to calculate rsi14.":
+        "Historial insuficiente para calcular RSI 14.",
+      "Not enough historical candles to calculate atr14.":
+        "Historial insuficiente para calcular ATR 14.",
+      "Not enough historical candles to calculate averageVolume.":
+        "Historial insuficiente para calcular volumen promedio.",
+      "Not enough historical candles to calculate support.":
+        "Historial insuficiente para calcular soporte.",
+      "Not enough historical candles to calculate resistance.":
+        "Historial insuficiente para calcular resistencia.",
+      "ATR is unavailable or estimated, so percent-based stop fallback is used.":
+        "ATR no está disponible o es estimado, así que se usa el fallback de stop por porcentaje.",
+      "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.":
+        "El stop basado en ATR quedaría en cero o menos, así que se ajustó a un nivel positivo seguro.",
     },
     decisionCopy: {
       autoWhy: "Auto recomendado eligió el mejor ajuste para el contexto actual:",
@@ -493,7 +665,9 @@ export const translations = {
       eligibleToken:
         "Elige el criptoactivo que quieres analizar. Principiante muestra una lista corta; Avanzado muestra más tokens soportados por el hackathon.",
       entryPrice: "El precio donde compraste, o el precio donde estás considerando entrar.",
-      positionSize: "Cuántos tokens o monedas tienes o planeas comprar. Se usa para estimar riesgo.",
+      positionSize: "Cantidad calculada de tokens para este setup de riesgo.",
+      totalCapital: "Tu base de capital para calcular el tamaño de posición según riesgo.",
+      calculatedPositionSize: "Tamaño readonly calculado con capital, riesgo, precio de entrada, ATR y distancia al stop.",
       strategyTimeframe:
         "Elige la temporalidad para evaluar la estrategia. Temporalidades cortas son más especulativas y requieren más confirmación; temporalidades altas son mejores para decisiones más pacientes.",
       strategyMode:
@@ -518,8 +692,8 @@ export const translations = {
       "30m": "30m",
       "1h": "1h",
       "1d": "1d",
-      "1w": "1s",
-      "1mo": "1 mes",
+      "1w": "1sem",
+      "1mo": "1mes",
     },
     strategyExplanations: {
       auto: {
@@ -534,7 +708,7 @@ export const translations = {
         simple: "Busca un setup donde el mercado muestra suficiente fuerza para continuar después de confirmar.",
         bestUsedWhen: "Úsalo cuando el precio está sobre soporte, la tendencia está sana y el riesgo está controlado.",
         avoidWhen: "Evítalo cuando el precio está demasiado extendido o sentimiento/liquidez son débiles.",
-        checks: "Revisa tendencia, soporte, EMA estimada, RSI estimado y riesgo.",
+        checks: "Revisa tendencia, soporte, MA estimada, RSI estimado y riesgo.",
         beginnerNote: "Este modo espera evidencia en vez de adivinar el fondo.",
       },
       breakout_retest: {

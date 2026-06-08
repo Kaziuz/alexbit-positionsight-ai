@@ -21,6 +21,7 @@ import { getTimeframeCategory, strategyTimeframes } from "@/lib/strategy-timefra
 import type {
   MarketContext,
   MarketQuote,
+  HistoryResponse,
   PositionInput,
   RiskVerdict,
   StrategyDecision,
@@ -31,19 +32,23 @@ import type {
 import { MetricTile } from "./MetricTile";
 import { PricePositionChart } from "./PricePositionChart";
 
-const minRiskPercentage = 1;
+const minRiskPercentage = 0.5;
 const maxRiskPercentage = 6;
+const recommendedRiskPercentage = 1;
+const defaultTotalCapital = 1000;
+const atrStopMultiple = 1.75;
 
 const strategyModes: StrategyMode[] = ["auto", "trend_confirmation", "breakout_retest", "defensive_rebound", "risk_check"];
 
 const initialPosition: PositionInput = {
   symbol: "AVAX",
   entryPrice: 34,
-  positionSize: 2,
+  positionSize: 0,
+  totalCapital: defaultTotalCapital,
   strategyTimeframe: "1d",
   timeframeCategory: "daily",
   analysisInterval: "1d",
-  maxRiskPercentage: 3,
+  maxRiskPercentage: recommendedRiskPercentage,
   strategyMode: "auto",
 };
 
@@ -115,6 +120,38 @@ function getLocalizedDecisionText(decision: StrategyDecision, t: TranslationSet)
   };
 }
 
+function roundCalculatedSize(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  if (value >= 1000) {
+    return Number(value.toFixed(2));
+  }
+
+  if (value >= 1) {
+    return Number(value.toFixed(4));
+  }
+
+  return Number(value.toFixed(8));
+}
+
+function formatCalculatedSize(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0";
+  }
+
+  if (value >= 1000) {
+    return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
+
+  if (value >= 1) {
+    return value.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  }
+
+  return value.toLocaleString("en-US", { maximumFractionDigits: 8 });
+}
+
 function InfoTooltip({ text }: { text: string }) {
   return (
     <span className="group relative inline-flex">
@@ -144,11 +181,12 @@ function LabelWithInfo({ label, tooltip }: { label: string; tooltip: string }) {
 export function PositionStrategyApp() {
   const [position, setPosition] = useState<PositionInput>(initialPosition);
   const [entryPriceInput, setEntryPriceInput] = useState(String(initialPosition.entryPrice));
-  const [positionSizeInput, setPositionSizeInput] = useState(String(initialPosition.positionSize));
+  const [totalCapitalInput, setTotalCapitalInput] = useState(String(initialPosition.totalCapital));
   const [tokenMode, setTokenMode] = useState<"beginner" | "advanced">("beginner");
   const [language, setLanguage] = useState<Language>("en");
   const [expandedStrategyMode, setExpandedStrategyMode] = useState<StrategyMode | null>("auto");
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
+  const [historyResponse, setHistoryResponse] = useState<HistoryResponse | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
   const t = translations[language];
@@ -156,20 +194,114 @@ export function PositionStrategyApp() {
   const availableTokens = tokenMode === "beginner" ? beginnerTokenSet : eligibleTokenUniverse;
   const selectedToken =
     eligibleTokenUniverse.find((token) => token.symbol === position.symbol) ?? eligibleTokenUniverse[0];
-  const quote = marketContext ? getQuoteFromContext(marketContext) : null;
+  const analysisContext = useMemo<MarketContext | null>(() => {
+    if (!marketContext) {
+      return null;
+    }
+
+    if (!historyResponse) {
+      return marketContext;
+    }
+
+    const indicators = historyResponse.indicators;
+
+    return {
+      ...marketContext,
+      technicals: {
+        ...marketContext.technicals,
+        ema20: indicators.ema20 ?? marketContext.technicals.ema20,
+        ema50: indicators.ema50 ?? marketContext.technicals.ema50,
+        ema200: indicators.ema200 ?? marketContext.technicals.ema200,
+        rsi14: indicators.rsi14 ?? marketContext.technicals.rsi14,
+        atr14: indicators.atr14 ?? marketContext.technicals.atr14,
+        averageVolume: indicators.averageVolume ?? marketContext.technicals.averageVolume,
+        support: indicators.support ?? marketContext.technicals.support,
+        resistance: indicators.resistance ?? marketContext.technicals.resistance,
+        historySource: historyResponse.source,
+        historyCandlesUsed: historyResponse.candles.length,
+        indicatorWarnings: historyResponse.warnings,
+      },
+    };
+  }, [historyResponse, marketContext]);
+  const quote = analysisContext ? getQuoteFromContext(analysisContext) : null;
   const parsedEntryPrice = useMemo(() => parseLocalizedNumberInput(entryPriceInput), [entryPriceInput]);
-  const parsedPositionSize = useMemo(() => parseLocalizedNumberInput(positionSizeInput), [positionSizeInput]);
+  const parsedTotalCapital = useMemo(() => parseLocalizedNumberInput(totalCapitalInput), [totalCapitalInput]);
+  const positionSizing = useMemo(() => {
+    if (!parsedEntryPrice.ok || parsedEntryPrice.value <= 0 || !parsedTotalCapital.ok || parsedTotalCapital.value <= 0) {
+      return {
+        positionSize: 0,
+        stopLoss: 0,
+        stopDistance: 0,
+        riskAmount: 0,
+        method: "percent_fallback" as const,
+        warnings: [] as string[],
+      };
+    }
+
+    const warnings: string[] = [];
+    const riskAmount = parsedTotalCapital.value * (position.maxRiskPercentage / 100);
+    const atr = analysisContext?.technicals.atr14;
+    const hasUsableAtr = typeof atr === "number" && Number.isFinite(atr) && atr > 0;
+    const fallbackStopDistance = parsedEntryPrice.value * (position.maxRiskPercentage / 100);
+    let stopDistance = hasUsableAtr ? atr * atrStopMultiple : fallbackStopDistance;
+    let method: "atr_volatility" | "percent_fallback" = hasUsableAtr ? "atr_volatility" : "percent_fallback";
+
+    if (!hasUsableAtr) {
+      warnings.push(t.atrFallbackWarning);
+    } else if (analysisContext?.technicals.historySource === "estimated" || historyResponse?.source === "estimated") {
+      warnings.push(t.positionSizeEstimatedWarning);
+    }
+
+    if (!Number.isFinite(stopDistance) || stopDistance <= 0) {
+      stopDistance = fallbackStopDistance;
+      method = "percent_fallback";
+      warnings.push(t.positionSizeFallbackWarning);
+    }
+
+    let stopLoss = parsedEntryPrice.value - stopDistance;
+
+    if (!Number.isFinite(stopLoss) || stopLoss <= 0) {
+      stopLoss = Math.max(parsedEntryPrice.value * 0.01, 0.00000001);
+      stopDistance = parsedEntryPrice.value - stopLoss;
+      warnings.push(t.stopLossClampedWarning);
+    }
+
+    const rawPositionSize = stopDistance > 0 ? riskAmount / stopDistance : 0;
+    const positionSize = roundCalculatedSize(rawPositionSize);
+
+    if (!Number.isFinite(rawPositionSize) || rawPositionSize <= 0) {
+      warnings.push(t.positionSizeInvalidWarning);
+    }
+
+    return {
+      positionSize,
+      stopLoss,
+      stopDistance,
+      riskAmount,
+      method,
+      warnings,
+    };
+  }, [
+    analysisContext?.technicals.atr14,
+    analysisContext?.technicals.historySource,
+    historyResponse?.source,
+    parsedEntryPrice,
+    parsedTotalCapital,
+    position.maxRiskPercentage,
+    t,
+  ]);
   const normalizedPosition = useMemo<PositionInput | null>(() => {
-    if (!parsedEntryPrice.ok || !parsedPositionSize.ok) {
+    if (!parsedEntryPrice.ok || !parsedTotalCapital.ok) {
       return null;
     }
 
     return {
       ...position,
       entryPrice: parsedEntryPrice.value,
-      positionSize: parsedPositionSize.value,
+      positionSize: positionSizing.positionSize,
+      totalCapital: parsedTotalCapital.value,
     };
-  }, [parsedEntryPrice, parsedPositionSize, position]);
+  }, [parsedEntryPrice, parsedTotalCapital, position, positionSizing.positionSize]);
 
   const validationMessages = useMemo(() => {
     const messages: string[] = [];
@@ -180,10 +312,14 @@ export function PositionStrategyApp() {
       messages.push(t.entryPriceGreaterThanZero);
     }
 
-    if (!parsedPositionSize.ok) {
-      messages.push(positionSizeInput.trim() ? t.useValidDecimals : t.positionSizeGreaterThanZero);
-    } else if (parsedPositionSize.value <= 0) {
-      messages.push(t.positionSizeGreaterThanZero);
+    if (!parsedTotalCapital.ok) {
+      messages.push(totalCapitalInput.trim() ? t.useValidDecimals : t.totalCapitalGreaterThanZero);
+    } else if (parsedTotalCapital.value <= 0) {
+      messages.push(t.totalCapitalGreaterThanZero);
+    }
+
+    if (positionSizing.positionSize <= 0) {
+      messages.push(t.calculatedPositionSizeUnavailable);
     }
 
     if (
@@ -191,22 +327,42 @@ export function PositionStrategyApp() {
       position.maxRiskPercentage < minRiskPercentage ||
       position.maxRiskPercentage > maxRiskPercentage
     ) {
-      messages.push(`${t.maxRiskRange} ${minRiskPercentage}% and ${maxRiskPercentage}%.`);
+      messages.push(`${t.maxRiskRange} ${minRiskPercentage}% ${t.and} ${maxRiskPercentage}%.`);
     }
 
     return messages;
-  }, [entryPriceInput, parsedEntryPrice, parsedPositionSize, position.maxRiskPercentage, positionSizeInput, t]);
+  }, [entryPriceInput, parsedEntryPrice, parsedTotalCapital, position.maxRiskPercentage, positionSizing.positionSize, t, totalCapitalInput]);
   const isPositionValid = validationMessages.length === 0;
   const entryDistanceWarning =
     quote && normalizedPosition
       ? Math.abs((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) > 0.5
       : false;
+  const genericSourceNotes = new Set<string>([
+    String(t.latestLiveHistoryEstimated),
+    String(translateMessage(
+      "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.",
+      t,
+    )),
+  ]);
   const warningMessages = [
     ...(entryDistanceWarning
       ? [t.entryDistanceWarning]
       : []),
-    ...(marketContext?.warnings ?? []).map((warning) => translateMessage(warning, t)),
-  ];
+    ...(getTimeframeCategory(position.strategyTimeframe) === "intraday" ? [t.intradayTradingWarning] : []),
+    ...(position.maxRiskPercentage > recommendedRiskPercentage ? [t.riskAboveOneWarning] : []),
+    ...positionSizing.warnings,
+    ...(analysisContext?.warnings ?? []).map((warning) => translateMessage(warning, t)),
+    ...(historyResponse?.warnings ?? []).map((warning) => translateMessage(warning, t)),
+  ].filter((warning) => !genericSourceNotes.has(String(warning)));
+  const dataNoteMainText =
+    historyResponse?.source === "coinmarketcap" ? t.latestAndHistoryFromCmc : t.latestLiveHistoryEstimated;
+  const dataNoteMainTextValue = String(dataNoteMainText);
+  const dataNoteWarnings = [...(analysisContext?.warnings ?? []), ...(historyResponse?.warnings ?? [])]
+    .map((warning) => String(translateMessage(warning, t)))
+    .filter(
+      (warning, index, warnings) =>
+        warning !== dataNoteMainTextValue && !genericSourceNotes.has(warning) && warnings.indexOf(warning) === index,
+    );
 
   useEffect(() => {
     let isActive = true;
@@ -248,13 +404,48 @@ export function PositionStrategyApp() {
     };
   }, [position.symbol]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function fetchHistory() {
+      try {
+        const response = await fetch(
+          `/api/history?symbol=${position.symbol}&timeframe=${position.strategyTimeframe}`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Historical OHLCV is unavailable.");
+        }
+
+        const data = (await response.json()) as HistoryResponse;
+
+        if (isActive) {
+          setHistoryResponse(data);
+        }
+      } catch {
+        if (isActive) {
+          setHistoryResponse(null);
+        }
+      }
+    }
+
+    fetchHistory();
+
+    return () => {
+      isActive = false;
+    };
+  }, [position.strategyTimeframe, position.symbol]);
+
   const strategyDecision = useMemo(() => {
-    if (!marketContext || !normalizedPosition || !isPositionValid) {
+    if (!analysisContext || !normalizedPosition || !isPositionValid) {
       return null;
     }
 
-    return generateStrategyDecision(normalizedPosition, marketContext, normalizedPosition.strategyMode ?? "auto");
-  }, [isPositionValid, marketContext, normalizedPosition]);
+    return generateStrategyDecision(normalizedPosition, analysisContext, normalizedPosition.strategyMode ?? "auto");
+  }, [analysisContext, isPositionValid, normalizedPosition]);
 
   const strategy = strategyDecision?.spec ?? null;
   const decisionText = strategyDecision ? getLocalizedDecisionText(strategyDecision, t) : null;
@@ -270,10 +461,69 @@ export function PositionStrategyApp() {
     quote && normalizedPosition && normalizedPosition.positionSize > 0 ? quote.price * normalizedPosition.positionSize : 0;
   const pricePrecision = quote && quote.price < 1 ? 6 : 2;
   const exportPayload =
-    strategyDecision && marketContext && normalizedPosition
-      ? createStrategyExport(normalizedPosition, strategyDecision, marketContext)
+    strategyDecision && analysisContext && normalizedPosition
+      ? createStrategyExport(normalizedPosition, strategyDecision, analysisContext, historyResponse ?? undefined)
       : null;
   const strategyJson = exportPayload ? JSON.stringify(exportPayload, null, 2) : "";
+  const headerMarketMetrics =
+    analysisContext
+      ? [
+          { label: t.trend, value: t.trendStateLabels[analysisContext.technicals.trendState] },
+          {
+            label: "RSI 14",
+            value: historyResponse?.indicators.rsi14 === null ? t.notEnoughHistory : analysisContext.technicals.rsi14.toFixed(0),
+          },
+          {
+            label: "MA 20",
+            value:
+              historyResponse?.indicators.ema20 === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.ema20, pricePrecision),
+          },
+          {
+            label: "MA 50",
+            value:
+              historyResponse?.indicators.ema50 === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.ema50, pricePrecision),
+          },
+          {
+            label: "MA 200",
+            value:
+              historyResponse?.indicators.ema200 === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.ema200, pricePrecision),
+          },
+          {
+            label: "ATR 14",
+            value:
+              historyResponse?.indicators.atr14 === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.atr14, pricePrecision),
+          },
+          {
+            label: t.avgVolume,
+            value:
+              historyResponse?.indicators.averageVolume === null
+                ? t.notEnoughHistory
+                : formatCompact(analysisContext.technicals.averageVolume ?? analysisContext.quote.volume24h),
+          },
+          {
+            label: t.support,
+            value:
+              historyResponse?.indicators.support === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.support, pricePrecision),
+          },
+          {
+            label: t.resistance,
+            value:
+              historyResponse?.indicators.resistance === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.resistance, pricePrecision),
+          },
+        ]
+      : [];
 
   function updateTokenMode(nextMode: "beginner" | "advanced") {
     setTokenMode(nextMode);
@@ -285,48 +535,60 @@ export function PositionStrategyApp() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-7 px-4 py-5 sm:px-6 lg:px-8">
-      <header className="flex flex-col gap-5 border-b border-slate-200 pb-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-800">
-            <Activity className="h-3.5 w-3.5" />
-            {t.badge}
+      <header className="border-b border-slate-200 pb-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-800">
+              <Activity className="h-3.5 w-3.5" />
+              {t.badge}
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-normal text-ink sm:text-4xl">
+              PositionSight AI
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{t.subtitle}</p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-soft">
+              <span className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.language}</span>
+              {(["en", "es"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setLanguage(option)}
+                  className={`h-8 rounded-md px-3 text-sm font-semibold transition ${
+                    language === option ? "bg-sky-700 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  {languageLabels[option]}
+                </button>
+              ))}
+            </div>
           </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal text-ink sm:text-4xl">
-            PositionSight AI
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{t.subtitle}</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-soft">
-            <span className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.language}</span>
-            {(["en", "es"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setLanguage(option)}
-                className={`h-8 rounded-md px-3 text-sm font-semibold transition ${
-                  language === option ? "bg-sky-700 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                }`}
-              >
-                {languageLabels[option]}
-              </button>
+          <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 xl:max-w-[920px] xl:grid-cols-6">
+            <MetricTile label={t.currentPrice} value={quote ? formatCurrency(quote.price, pricePrecision) : "--"} />
+            <MetricTile
+              label={t.move24h}
+              value={quote ? formatPercentage(quote.percentChange24h) : "--"}
+              tone={quote && quote.percentChange24h < 0 ? "negative" : "positive"}
+            />
+            <MetricTile label={t.volume24h} value={quote ? formatCompact(quote.volume24h) : "--"} />
+            <MetricTile label={t.marketCap} value={quote?.marketCap ? formatCompact(quote.marketCap) : t.unavailable} />
+            <MetricTile label={t.source} value={!quote || quote.source === "mock" ? t.mockDataFallback : t.cmcLiveQuote} />
+            <MetricTile
+              label={t.pnl}
+              value={quote && isPositionValid ? `${formatPercentage(pnlPercentage)} ${formatCurrency(pnlAmount)}` : "--"}
+              tone={pnlAmount < 0 ? "negative" : "positive"}
+            />
+          </div>
+        </div>
+        {headerMarketMetrics.length ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9">
+            {headerMarketMetrics.map((metric) => (
+              <div key={metric.label} className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{metric.label}</div>
+                <div className="mt-0.5 truncate text-sm font-semibold text-slate-950">{metric.value}</div>
+              </div>
             ))}
           </div>
-        </div>
-        <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 xl:max-w-[920px] xl:grid-cols-6">
-          <MetricTile label={t.currentPrice} value={quote ? formatCurrency(quote.price, pricePrecision) : "--"} />
-          <MetricTile
-            label={t.move24h}
-            value={quote ? formatPercentage(quote.percentChange24h) : "--"}
-            tone={quote && quote.percentChange24h < 0 ? "negative" : "positive"}
-          />
-          <MetricTile label={t.volume24h} value={quote ? formatCompact(quote.volume24h) : "--"} />
-          <MetricTile label={t.marketCap} value={quote?.marketCap ? formatCompact(quote.marketCap) : t.unavailable} />
-          <MetricTile label={t.source} value={!quote || quote.source === "mock" ? t.mockDataFallback : t.cmcLiveQuote} />
-          <MetricTile
-            label={t.pnl}
-            value={quote && isPositionValid ? `${formatPercentage(pnlPercentage)} ${formatCurrency(pnlAmount)}` : "--"}
-            tone={pnlAmount < 0 ? "negative" : "positive"}
-          />
-        </div>
+        ) : null}
       </header>
 
       <section className="grid gap-7 xl:grid-cols-[420px_minmax(0,1fr)]">
@@ -410,16 +672,32 @@ export function PositionStrategyApp() {
 
             <label className="block">
               <LabelWithInfo
-                label={t.positionSize}
-                tooltip={t.tooltips.positionSize}
+                label={t.totalCapital}
+                tooltip={t.tooltips.totalCapital}
               />
               <input
                 type="text"
                 inputMode="decimal"
-                value={positionSizeInput}
-                onChange={(event) => setPositionSizeInput(event.target.value)}
+                value={totalCapitalInput}
+                onChange={(event) => setTotalCapitalInput(event.target.value)}
                 className="mt-1 h-11 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
               />
+            </label>
+
+            <label className="block">
+              <LabelWithInfo
+                label={t.calculatedPositionSize}
+                tooltip={t.tooltips.calculatedPositionSize}
+              />
+              <input
+                type="text"
+                value={formatCalculatedSize(positionSizing.positionSize)}
+                readOnly
+                className="mt-1 h-11 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-950 outline-none"
+              />
+              <span className="mt-1 block text-xs leading-5 text-slate-500">
+                {t.calculatedPositionSizeHelper}
+              </span>
             </label>
 
             <div>
@@ -620,37 +898,43 @@ export function PositionStrategyApp() {
             )}
           </section>
 
-          {marketContext ? (
+          {analysisContext ? (
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-lg font-semibold text-ink">{t.marketContext}</div>
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  {marketContext.source === "coinmarketcap"
+                  {analysisContext.source === "coinmarketcap"
                     ? t.estimatedContextFields
                     : t.mockDataFallback}
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <MetricTile label={t.trend} value={t.trendStateLabels[marketContext.technicals.trendState]} />
-                <MetricTile label="RSI 14" value={marketContext.technicals.rsi14.toFixed(0)} />
-                <MetricTile label="ATR 14" value={formatCurrency(marketContext.technicals.atr14, pricePrecision)} />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricTile
+                  label={t.historySource}
+                  value={
+                    historyResponse?.source === "coinmarketcap"
+                      ? t.coinMarketCapHistoricalOhlcv
+                      : t.estimatedHistory
+                  }
+                />
                 <MetricTile
                   label={t.sentiment}
-                  value={`${t.sentimentLabels[marketContext.sentiment.label]} (${marketContext.sentiment.score})`}
+                  value={`${t.sentimentLabels[analysisContext.sentiment.label]} (${analysisContext.sentiment.score})`}
                 />
-                <MetricTile label={t.liquidity} value={`${marketContext.orderBook.liquidityScore}/100`} />
-                <MetricTile label={t.derivatives} value={t.derivativesLabels[marketContext.derivatives.longShortBias]} />
+                <MetricTile label={t.liquidity} value={`${analysisContext.orderBook.liquidityScore}/100`} />
+                <MetricTile label={t.derivatives} value={t.derivativesLabels[analysisContext.derivatives.longShortBias]} />
               </div>
-              {marketContext.warnings?.length ? (
-                <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-                  <div className="font-semibold">{t.dataNote}</div>
-                  <ul className="mt-1 list-disc space-y-1 pl-4">
-                    {marketContext.warnings.map((warning, index) => (
-                      <li key={`${warning}-${index}`}>{translateMessage(warning, t)}</li>
+              <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+                <div className="font-semibold">{t.dataNote}</div>
+                <p className="mt-1">{dataNoteMainText}</p>
+                {dataNoteWarnings.length ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {dataNoteWarnings.map((warning, index) => (
+                      <li key={`${warning}-${index}`}>{warning}</li>
                     ))}
                   </ul>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </section>
           ) : null}
 
@@ -663,10 +947,10 @@ export function PositionStrategyApp() {
                 </div>
                 <div className="mt-4 rounded-md border border-slate-200 bg-panel p-4">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {t.strategyEvaluated}
+                    {t.selectedStrategy}
                   </div>
                   <div className="mt-1 text-xl font-semibold text-slate-950">
-                    {t.strategyTypeLabels[strategyDecision.evaluatedStrategyType]}
+                    {t.strategyModeLabels[strategyDecision.selectedStrategyMode]}
                   </div>
                 </div>
 
@@ -727,7 +1011,7 @@ export function PositionStrategyApp() {
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <MetricTile label={t.stopLoss} value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />
-                  <MetricTile label={t.takeProfit} value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
+                  <MetricTile label={t.trailingExit} value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
                 </div>
               </div>
 

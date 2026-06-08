@@ -1,4 +1,11 @@
-import type { BacktestSpec, MarketContext, PositionInput, StrategyDecision, StrategyExport } from "@/types/strategy";
+import type {
+  BacktestSpec,
+  HistoryResponse,
+  MarketContext,
+  PositionInput,
+  StrategyDecision,
+  StrategyExport,
+} from "@/types/strategy";
 import {
   getAggregationHint,
   getTimeframeCategory,
@@ -12,6 +19,7 @@ function getInputSchema(): StrategyExport["inputSchema"] {
       "symbol",
       "entryPrice",
       "positionSize",
+      "totalCapital",
       "strategyTimeframe",
       "timeframeCategory",
       "analysisInterval",
@@ -21,7 +29,12 @@ function getInputSchema(): StrategyExport["inputSchema"] {
     properties: {
       symbol: { type: "string", description: "Eligible token symbol to analyze." },
       entryPrice: { type: "number", exclusiveMinimum: 0, description: "User entry price or planned entry price." },
-      positionSize: { type: "number", exclusiveMinimum: 0, description: "Token quantity held or planned." },
+      positionSize: {
+        type: "number",
+        exclusiveMinimum: 0,
+        description: "Calculated token quantity based on total capital, max risk, entry, ATR, and stop distance.",
+      },
+      totalCapital: { type: "number", exclusiveMinimum: 0, description: "Capital base used for risk sizing." },
       strategyTimeframe: {
         type: "string",
         enum: ["15m", "30m", "1h", "1d", "1w", "1mo"],
@@ -39,9 +52,9 @@ function getInputSchema(): StrategyExport["inputSchema"] {
       },
       maxRiskPercentage: {
         type: "number",
-        minimum: 1,
+        minimum: 0.5,
         maximum: 6,
-        description: "Maximum percentage of entry price to risk if setup fails.",
+        description: "Maximum percentage of total capital to risk if setup fails. PositionSight defaults to 1%.",
       },
       strategyMode: {
         type: "string",
@@ -55,19 +68,28 @@ function getInputSchema(): StrategyExport["inputSchema"] {
 function getCommonRules(position: PositionInput, decision: StrategyDecision, context: MarketContext) {
   const spec = decision.spec;
   const timeframe = getTimeframeProfile(position.strategyTimeframe);
+  const trailingExit = {
+    enabled: true as const,
+    method: "atr_ma_trailing" as const,
+    initialReference: spec.takeProfit,
+    atrMultiple: spec.riskRules.atrMultiple ?? 1.75,
+  };
 
   return {
     stopRule: {
-      type: "fixed_price_stop",
+      type: spec.riskRules.positionSizingMethod === "atr_volatility" ? "atr_volatility_stop" : "fixed_price_stop",
       stopLoss: spec.stopLoss,
+      atrMultiple: spec.riskRules.atrMultiple,
+      stopDistance: spec.riskRules.stopDistance,
       trigger: "close_at_or_below_stop_loss",
     },
     takeProfitRule: {
-      type: "fixed_price_target",
+      type: "compatibility_trailing_reference",
       takeProfit: spec.takeProfit,
-      allowTrailingRunner: true,
-      trigger: "close_at_or_above_take_profit",
+      trailingExit,
+      trigger: "activate_trailing_exit_at_or_above_initial_reference",
     },
+    trailingExit,
     invalidationRule: {
       type: "price_level",
       invalidationLevel: spec.invalidationLevel,
@@ -75,11 +97,15 @@ function getCommonRules(position: PositionInput, decision: StrategyDecision, con
     },
     positionSizing: {
       type: "risk_based",
+      totalCapital: position.totalCapital,
       entryPrice: position.entryPrice,
       positionSize: position.positionSize,
+      calculatedPositionSize: position.positionSize,
       maxRiskPercentage: position.maxRiskPercentage,
+      stopDistance: spec.riskRules.stopDistance,
+      method: spec.riskRules.positionSizingMethod,
       estimatedRiskAmount: spec.riskRules.estimatedRiskAmount,
-      sizingNote: "Size positions from defined risk, not available capital alone.",
+      sizingNote: "Size positions from total capital, defined risk, volatility, and stop distance.",
     },
     riskManagement: {
       maxRiskPercentage: position.maxRiskPercentage,
@@ -196,11 +222,11 @@ export function createBacktestSpec(
       requiresPriceAboveSupport: true,
       support: context.technicals.support,
       currentPrice: context.quote.price,
-      emaConditions: {
-        ema20: context.technicals.ema20,
-        ema50: context.technicals.ema50,
-        ema200: context.technicals.ema200,
-        preferredRelationship: "ema20 >= ema50 >= ema200 or neutral-to-bullish trend",
+      maConditions: {
+        ma20: context.technicals.ema20,
+        ma50: context.technicals.ema50,
+        ma200: context.technicals.ema200,
+        preferredRelationship: "ma20 >= ma50 >= ma200 or neutral-to-bullish trend",
       },
       rsi14: context.technicals.rsi14,
       rsiMustBeBelow: 72,
@@ -219,7 +245,13 @@ export function createStrategyExport(
   position: PositionInput,
   decision: StrategyDecision,
   context: MarketContext,
+  history?: HistoryResponse,
 ): StrategyExport {
+  const historySource = history?.source ?? context.technicals.historySource ?? "estimated";
+  const indicatorSource = historySource === "coinmarketcap" ? "coinmarketcap_ohlcv" : "estimated_candles";
+  const estimatedHistoryWarning =
+    "Historical OHLCV is unavailable with the current CoinMarketCap plan; chart path and indicators are estimated.";
+  const indicatorWarnings = history?.warnings ?? context.technicals.indicatorWarnings ?? [];
   const limitations =
     context.source === "mock"
       ? [
@@ -229,8 +261,12 @@ export function createStrategyExport(
           "no live execution",
         ]
       : [
-          "Historical OHLCV is not integrated yet",
-          "advanced context fields are estimated until historical OHLCV is added",
+          ...(historySource === "coinmarketcap"
+            ? []
+            : [
+                "Historical OHLCV is unavailable with the current CoinMarketCap plan",
+                "chart path and indicators are estimated",
+              ]),
           "not financial advice",
           "no live execution",
         ];
@@ -245,11 +281,15 @@ export function createStrategyExport(
     inputSchema: getInputSchema(),
     dataProvenance: {
       source: context.source,
+      latestQuoteSource: context.source,
+      historySource,
       isLive: context.source === "coinmarketcap",
       intendedLiveSource: "CoinMarketCap",
       generatedAt: new Date().toISOString(),
     },
-    chartSeriesType: "estimated_projection",
+    historySource,
+    indicatorSource,
+    chartSeriesType: historySource === "coinmarketcap" ? "historical_ohlcv" : "estimated_from_live_quote_context",
     advancedContextType: "estimated_until_ohlcv",
     dataRequirements: {
       requiredSeries: ["open", "high", "low", "close", "volume"],
@@ -257,14 +297,22 @@ export function createStrategyExport(
       aggregationHint: getAggregationHint(position.strategyTimeframe),
       minimumHistoryDays: 200,
       lookbackPeriods: 200,
-      requiredIndicators: ["ema20", "ema50", "ema200", "rsi14", "atr14", "support", "resistance"],
+      requiredIndicators: ["ma20", "ma50", "ma200", "rsi14", "atr14", "support", "resistance"],
     },
+    totalCapital: position.totalCapital,
+    calculatedPositionSize: position.positionSize,
     selectedStrategyMode: decision.selectedStrategyMode,
     evaluatedStrategyType: decision.evaluatedStrategyType,
     finalRiskVerdict: decision.finalRiskVerdict,
     noTradeRecommended: decision.noTradeRecommended,
     noTradeReason: decision.noTradeReason,
     backtestSpec: createBacktestSpec(position, decision, context),
+    trailingExit: {
+      enabled: true,
+      method: "atr_ma_trailing",
+      initialReference: decision.spec.takeProfit,
+      atrMultiple: decision.spec.riskRules.atrMultiple ?? 1.75,
+    },
     executionAssumptions: {
       initialCapital: 10000,
       feesBps: 10,
@@ -301,7 +349,29 @@ export function createStrategyExport(
       beginnerExplanation: decision.beginnerExplanation,
     },
     marketContext: context,
+    history: {
+      source: historySource,
+      candlesUsed: history?.candles.length ?? context.technicals.historyCandlesUsed ?? 0,
+      indicatorSource,
+      indicators: history?.indicators ?? {
+        ema20: context.technicals.ema20,
+        ema50: context.technicals.ema50,
+        ema200: context.technicals.ema200,
+        ma20: context.technicals.ema20,
+        ma50: context.technicals.ema50,
+        ma200: context.technicals.ema200,
+        rsi14: context.technicals.rsi14,
+        atr14: context.technicals.atr14,
+        averageVolume: context.technicals.averageVolume ?? null,
+        support: context.technicals.support,
+        resistance: context.technicals.resistance,
+      },
+      warnings: historySource === "coinmarketcap" ? indicatorWarnings : [estimatedHistoryWarning, ...indicatorWarnings],
+    },
     explanation: decision.beginnerExplanation,
-    warnings: decision.warnings,
+    warnings:
+      historySource === "coinmarketcap"
+        ? [...decision.warnings, ...indicatorWarnings]
+        : [...decision.warnings, estimatedHistoryWarning, ...indicatorWarnings],
   };
 }

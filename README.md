@@ -20,14 +20,17 @@ Because this project does not execute trades and does not deploy or control an o
 
 - Analyzes a selected eligible crypto asset.
 - Fetches live latest quote data from CoinMarketCap through a server-side API route.
+- Attempts to fetch historical OHLCV from CoinMarketCap through a server-side API route.
 - Falls back to local mock market context safely when CoinMarketCap is unavailable.
 - Visualizes current price vs entry price.
-- Shows a timeframe-aware estimated projection until real OHLCV paths are added.
-- Shows risk, stop loss, take profit, and invalidation levels.
+- Shows CoinMarketCap historical OHLCV when available, or clearly labeled estimated candles when unavailable.
+- Shows risk, stop loss, trailing-exit reference, and invalidation levels in the export.
 - Provides Beginner and Advanced eligible token modes.
 - Provides English and Spanish UI language options.
 - Supports strategy timeframes of 15m, 30m, 1h, 1d, 1w, and 1mo.
 - Treats intraday timeframes as higher-risk research contexts that require stronger confirmation.
+- Defaults to 1d context and 1% risk for patient, capital-preservation-oriented analysis.
+- Calculates position size from total capital, risk percentage, entry price, ATR, and stop distance.
 - Lets users choose Auto Recommended or a manual strategy mode.
 - Explains each strategy mode with beginner-friendly educational cards.
 - Generates an explainable strategy decision and risk signal.
@@ -104,10 +107,18 @@ GET /api/market?symbol=ADA
 GET /api/market?symbol=ADA&debug=1
 ```
 
+Historical OHLCV and indicators are available through:
+
+```text
+GET /api/history?symbol=ADA&timeframe=1d
+GET /api/history?symbol=ADA&timeframe=1d&debug=1
+```
+
 Behavior:
 
 - With a valid `CMC_API_KEY`, `source` should be `coinmarketcap`.
 - Without a key, or if CoinMarketCap fails, `source` falls back to `mock`.
+- For history, `source` is `coinmarketcap` when OHLCV candles are available and `estimated` when the API response or plan cannot provide historical candles.
 - `debug=1` includes safe diagnostics such as request mode, CMC ID, HTTP status, and parser status.
 - Diagnostics never include the API key.
 
@@ -122,6 +133,11 @@ It includes:
 - `inputSchema`
 - `dataProvenance`
 - `dataRequirements`
+- `historySource`
+- `indicatorSource`
+- `indicators`
+- `chartSeriesType`
+- `advancedContextType`
 - `strategySpec`
 - `strategyDecision`
 - `selectedStrategyMode`
@@ -140,6 +156,7 @@ The export preserves both human-readable strategy explanations and machine-reada
 
 - Next.js + TypeScript MVP.
 - CoinMarketCap latest quote integration through a server-side API route.
+- CoinMarketCap historical OHLCV attempt through a server-side API route.
 - `CMC_API_KEY` stored in `.env.local`.
 - `.env.local` ignored by Git.
 - Mock fallback when CoinMarketCap live quote is unavailable.
@@ -168,11 +185,12 @@ The export preserves both human-readable strategy explanations and machine-reada
 ## Current Limitations
 
 - CoinMarketCap latest quote data is live when `CMC_API_KEY` is configured.
-- Some advanced context fields are estimated until historical OHLCV is integrated.
-- Chart projection is deterministic estimated behavior until historical OHLCV is integrated.
+- Historical OHLCV is attempted from CoinMarketCap when `CMC_API_KEY` is configured and the API plan allows it.
+- Indicators are real only when historical OHLCV candles are available.
+- Estimated candles and indicators are fallback-only when OHLCV is unavailable.
 - Strategy analysis supports 15m, 30m, 1h, 1d, 1w, and 1mo contexts.
 - Intraday timeframes are supported for testing and research, but the engine treats them with more caution and does not encourage overtrading.
-- Historical OHLCV and real indicator calculations are planned next.
+- Historical OHLCV access depends on the CoinMarketCap plan; estimated candles and indicators remain clearly labeled when OHLCV is unavailable.
 - There is no live trade execution.
 - Strategy output is educational and not financial advice.
 
@@ -181,7 +199,7 @@ The export preserves both human-readable strategy explanations and machine-reada
 - Strategy timeframe selection: 15m, 30m, 1h, 1d, 1w, 1mo.
 - Historical OHLCV and timeframe-aware backtest assumptions.
 - Historical OHLCV integration.
-- Real EMA / RSI / ATR calculations.
+- Real MA / RSI / ATR calculations when OHLCV is available.
 - Basic backtest runner.
 - Demo video.
 - DoraHacks final submission polish.

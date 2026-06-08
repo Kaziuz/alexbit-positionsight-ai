@@ -9,6 +9,7 @@ type PositionRequestBody = {
   symbol?: unknown;
   entryPrice?: unknown;
   positionSize?: unknown;
+  totalCapital?: unknown;
   strategyTimeframe?: unknown;
   analysisInterval?: unknown;
   maxRiskPercentage?: unknown;
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   const symbol = typeof body.symbol === "string" ? body.symbol : "";
   const entryPrice = parseRequestNumber(body.entryPrice);
   const positionSize = parseRequestNumber(body.positionSize);
+  const totalCapital = body.totalCapital === undefined ? { ok: true as const, value: 1000 } : parseRequestNumber(body.totalCapital);
   const maxRiskPercentage = parseRequestNumber(body.maxRiskPercentage);
   const strategyTimeframe =
     typeof body.strategyTimeframe === "string" &&
@@ -51,6 +53,8 @@ export async function POST(request: Request) {
     entryPrice.value <= 0 ||
     !positionSize.ok ||
     positionSize.value <= 0 ||
+    !totalCapital.ok ||
+    totalCapital.value <= 0 ||
     !maxRiskPercentage.ok ||
     maxRiskPercentage.value <= 0 ||
     !strategyTimeframe
@@ -62,6 +66,7 @@ export async function POST(request: Request) {
     symbol,
     entryPrice: entryPrice.value,
     positionSize: positionSize.value,
+    totalCapital: totalCapital.value,
     strategyTimeframe,
     timeframeCategory: getTimeframeCategory(strategyTimeframe),
     analysisInterval: strategyTimeframe,

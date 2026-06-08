@@ -43,6 +43,47 @@ export type MarketQuote = {
   source: "mock" | "coinmarketcap";
 };
 
+export type OhlcvCandle = {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+export type HistorySource = "coinmarketcap" | "estimated";
+
+export type TechnicalIndicators = {
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  ma20?: number | null;
+  ma50?: number | null;
+  ma200?: number | null;
+  rsi14: number | null;
+  atr14: number | null;
+  averageVolume: number | null;
+  support: number | null;
+  resistance: number | null;
+};
+
+export type HistoryResponse = {
+  symbol: string;
+  source: HistorySource;
+  timeframe: StrategyTimeframe;
+  candles: OhlcvCandle[];
+  indicators: TechnicalIndicators;
+  diagnostics?: {
+    hasCmcApiKey: boolean;
+    cmcId?: number;
+    cmcStatus?: number;
+    parsedLiveHistory?: boolean;
+    fallbackReason?: string;
+  };
+  warnings: string[];
+};
+
 export type MarketContext = {
   symbol: string;
   source: "mock" | "coinmarketcap";
@@ -70,8 +111,12 @@ export type MarketContext = {
     ema200: number;
     rsi14: number;
     atr14: number;
+    averageVolume?: number;
     support: number;
     resistance: number;
+    historySource?: HistorySource;
+    historyCandlesUsed?: number;
+    indicatorWarnings?: string[];
     trendState: "bullish" | "neutral" | "bearish";
     closePosition:
       | "above_support"
@@ -104,6 +149,7 @@ export type PositionInput = {
   symbol: string;
   entryPrice: number;
   positionSize: number;
+  totalCapital: number;
   strategyTimeframe: StrategyTimeframe;
   timeframeCategory: TimeframeCategory;
   analysisInterval: StrategyTimeframe;
@@ -125,8 +171,14 @@ export type StrategySpec = {
   riskRules: {
     maxRiskPercentage: number;
     positionSize: number;
+    totalCapital?: number;
+    calculatedPositionSize?: number;
+    positionSizingMethod?: "atr_volatility" | "percent_fallback";
+    stopDistance?: number;
+    atrMultiple?: number;
     estimatedRiskAmount: number;
     noTradeReason?: string;
+    warnings?: string[];
   };
   dataUsed: {
     entryPrice: number;
@@ -170,6 +222,12 @@ export type BacktestSpec = {
   exitRule: Record<string, unknown>;
   stopRule: Record<string, unknown>;
   takeProfitRule: Record<string, unknown>;
+  trailingExit?: {
+    enabled: true;
+    method: "atr_ma_trailing";
+    initialReference: number;
+    atrMultiple: number;
+  };
   invalidationRule: Record<string, unknown>;
   positionSizing: Record<string, unknown>;
   riskManagement: Record<string, unknown>;
@@ -188,11 +246,15 @@ export type StrategyExport = {
   };
   dataProvenance: {
     source: MarketContext["source"];
+    latestQuoteSource?: MarketContext["source"];
+    historySource?: HistorySource;
     isLive: boolean;
     intendedLiveSource: "CoinMarketCap";
     generatedAt: string;
   };
-  chartSeriesType: "estimated_projection";
+  historySource?: HistorySource;
+  indicatorSource?: "coinmarketcap_ohlcv" | "estimated_candles";
+  chartSeriesType: "estimated_from_live_quote_context" | "historical_ohlcv";
   advancedContextType: "estimated_until_ohlcv";
   dataRequirements: {
     requiredSeries: ["open", "high", "low", "close", "volume"];
@@ -200,7 +262,15 @@ export type StrategyExport = {
     aggregationHint?: AggregationHint;
     minimumHistoryDays: 200;
     lookbackPeriods: 200;
-    requiredIndicators: ["ema20", "ema50", "ema200", "rsi14", "atr14", "support", "resistance"];
+    requiredIndicators: ["ma20", "ma50", "ma200", "rsi14", "atr14", "support", "resistance"];
+  };
+  totalCapital?: number;
+  calculatedPositionSize?: number;
+  trailingExit?: {
+    enabled: true;
+    method: "atr_ma_trailing";
+    initialReference: number;
+    atrMultiple: number;
   };
   selectedStrategyMode: StrategyMode;
   evaluatedStrategyType: StrategyType;
@@ -231,6 +301,17 @@ export type StrategyExport = {
   strategySpec: StrategySpec;
   strategyDecision: Omit<StrategyDecision, "spec">;
   marketContext: MarketContext;
+  history?: {
+    source: HistorySource;
+    candlesUsed: number;
+    indicatorSource: "coinmarketcap_ohlcv" | "estimated_candles";
+    indicators: TechnicalIndicators & {
+      ma20?: number | null;
+      ma50?: number | null;
+      ma200?: number | null;
+    };
+    warnings: string[];
+  };
   explanation: string;
   warnings: string[];
 };

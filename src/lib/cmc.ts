@@ -1,5 +1,6 @@
 import { getMockMarketContext } from "@/data/mock-market";
-import type { MarketContext } from "@/types/strategy";
+import { calculateTechnicalIndicators } from "@/lib/indicators";
+import type { HistoryResponse, MarketContext, OhlcvCandle, StrategyTimeframe } from "@/types/strategy";
 
 type FetchCmcLatestQuoteInput = {
   symbol: string;
@@ -138,7 +139,7 @@ function createNeutralProxyContext(symbol: string, quote: MarketContext["quote"]
     symbol,
     source: "coinmarketcap",
     warnings: [
-      "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+      "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.",
     ],
     quote,
     technicals: {
@@ -204,7 +205,7 @@ function normalizeCmcAsset(symbol: string, asset: CmcAssetQuote): MarketContext 
     symbol: mockContext.symbol,
     source: "coinmarketcap",
     warnings: [
-      "CoinMarketCap latest quote is live. Some advanced context fields are estimated until historical OHLCV is added.",
+      "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.",
     ],
     quote,
   };
@@ -300,4 +301,255 @@ export async function fetchCmcLatestQuote(input: FetchCmcLatestQuoteInput): Prom
       parserError: error instanceof Error ? error.message : "Unable to parse CoinMarketCap quote.",
     });
   }
+}
+
+type FetchCmcOhlcvHistoricalParams = {
+  symbol: string;
+  cmcId?: number;
+  timeframe: StrategyTimeframe;
+  debug?: boolean;
+};
+
+type CmcHistoricalQuote = {
+  time_open?: string;
+  time_close?: string;
+  timestamp?: string;
+  quote?: {
+    USD?: {
+      open?: number;
+      high?: number;
+      low?: number;
+      close?: number;
+      volume?: number;
+      timestamp?: string;
+    };
+  };
+};
+
+function getHistoryLookbackDays(timeframe: StrategyTimeframe) {
+  if (timeframe === "15m" || timeframe === "30m" || timeframe === "1h") {
+    return 30;
+  }
+
+  if (timeframe === "1w") {
+    return 420;
+  }
+
+  if (timeframe === "1mo") {
+    return 900;
+  }
+
+  return 260;
+}
+
+function getPreferredHistoryIntervals(timeframe: StrategyTimeframe) {
+  if (timeframe === "15m" || timeframe === "30m" || timeframe === "1h") {
+    return ["hourly", "daily"] as const;
+  }
+
+  return ["daily"] as const;
+}
+
+function parseHistoricalCandles(payload: unknown): OhlcvCandle[] {
+  const root = payload as {
+    data?: { quotes?: CmcHistoricalQuote[] } | Array<{ quotes?: CmcHistoricalQuote[] }>;
+  };
+  const data = Array.isArray(root.data) ? root.data[0] : root.data;
+  const quotes = data?.quotes;
+
+  if (!Array.isArray(quotes)) {
+    return [];
+  }
+
+  return quotes
+    .map((item) => {
+      const usd = item.quote?.USD;
+
+      if (!usd) {
+        return null;
+      }
+
+      const open = usd.open;
+      const high = usd.high;
+      const low = usd.low;
+      const close = usd.close;
+      const volume = usd.volume;
+
+      if (
+        typeof open !== "number" ||
+        typeof high !== "number" ||
+        typeof low !== "number" ||
+        typeof close !== "number" ||
+        typeof volume !== "number" ||
+        !Number.isFinite(open) ||
+        !Number.isFinite(high) ||
+        !Number.isFinite(low) ||
+        !Number.isFinite(close) ||
+        !Number.isFinite(volume)
+      ) {
+        return null;
+      }
+
+      return {
+        time: usd.timestamp ?? item.time_close ?? item.timestamp ?? item.time_open ?? new Date().toISOString(),
+        open,
+        high,
+        low,
+        close,
+        volume,
+      };
+    })
+    .filter((item): item is OhlcvCandle => item !== null);
+}
+
+function createEstimatedHistory(params: FetchCmcOhlcvHistoricalParams, fallbackReason: string): HistoryResponse {
+  const mockContext = getMockMarketContext(params.symbol);
+  const quote = mockContext?.quote;
+  const price = quote?.price ?? 1;
+  const now = new Date();
+  const candles: OhlcvCandle[] = Array.from({ length: 60 }, (_, index) => {
+    const distanceFromNow = 59 - index;
+    const time = new Date(now);
+
+    if (params.timeframe === "15m") {
+      time.setMinutes(now.getMinutes() - distanceFromNow * 15);
+    } else if (params.timeframe === "30m") {
+      time.setMinutes(now.getMinutes() - distanceFromNow * 30);
+    } else if (params.timeframe === "1h") {
+      time.setHours(now.getHours() - distanceFromNow);
+    } else {
+      time.setDate(now.getDate() - distanceFromNow);
+    }
+
+    const drift = (index - 30) / 1200;
+    const wave = Math.sin(index / 4) * 0.018;
+    const close = index === 59 ? price : price * (1 + drift + wave);
+    const open = close * (1 - Math.sin(index / 3) * 0.006);
+    const high = Math.max(open, close) * 1.012;
+    const low = Math.min(open, close) * 0.988;
+    const volume = Math.max((quote?.volume24h ?? 1_000_000) / 24, 1);
+
+    return {
+      time: time.toISOString(),
+      open,
+      high,
+      low,
+      close,
+      volume,
+    };
+  });
+  const indicatorResult = calculateTechnicalIndicators(candles);
+
+  return {
+    symbol: params.symbol,
+    source: "estimated",
+    timeframe: params.timeframe,
+    candles,
+    indicators: indicatorResult.indicators,
+    diagnostics: params.debug
+      ? {
+          hasCmcApiKey: Boolean(process.env.CMC_API_KEY),
+          cmcId: params.cmcId,
+          parsedLiveHistory: false,
+          fallbackReason,
+        }
+      : undefined,
+    warnings: [
+      "Historical OHLCV is unavailable with the current CoinMarketCap response or plan; chart path is estimated from live quote context.",
+      ...indicatorResult.warnings,
+    ],
+  };
+}
+
+export async function fetchCmcOhlcvHistorical(
+  params: FetchCmcOhlcvHistoricalParams,
+): Promise<HistoryResponse> {
+  const apiKey = process.env.CMC_API_KEY;
+  const baseUrl = process.env.CMC_API_BASE_URL ?? "https://pro-api.coinmarketcap.com";
+  const symbol = params.symbol.trim().toUpperCase();
+
+  if (!apiKey) {
+    return createEstimatedHistory({ ...params, symbol }, "CMC_API_KEY is not configured.");
+  }
+
+  const timeEnd = new Date();
+  const timeStart = new Date(timeEnd);
+  timeStart.setDate(timeEnd.getDate() - getHistoryLookbackDays(params.timeframe));
+
+  for (const interval of getPreferredHistoryIntervals(params.timeframe)) {
+    const searchParams = new URLSearchParams({
+      convert: "USD",
+      time_start: timeStart.toISOString(),
+      time_end: timeEnd.toISOString(),
+      interval,
+    });
+
+    if (params.cmcId) {
+      searchParams.set("id", String(params.cmcId));
+    } else {
+      searchParams.set("symbol", symbol);
+    }
+
+    let response: Response;
+    let payload: unknown;
+
+    try {
+      response = await fetch(`${baseUrl}/v2/cryptocurrency/ohlcv/historical?${searchParams.toString()}`, {
+        cache: "no-store",
+        headers: {
+          "X-CMC_PRO_API_KEY": apiKey,
+          Accept: "application/json",
+        },
+      });
+      payload = (await response.json().catch(() => ({}))) as unknown;
+    } catch {
+      if (interval === "daily") {
+        return createEstimatedHistory(
+          { ...params, symbol },
+          "CoinMarketCap historical OHLCV request failed before a response was returned.",
+        );
+      }
+
+      continue;
+    }
+
+    if (!response.ok) {
+      if (interval === "daily") {
+        return createEstimatedHistory(
+          { ...params, symbol },
+          `CoinMarketCap historical OHLCV request failed with status ${response.status}.`,
+        );
+      }
+
+      continue;
+    }
+
+    const candles = parseHistoricalCandles(payload);
+
+    if (candles.length > 0) {
+      const indicatorResult = calculateTechnicalIndicators(candles);
+
+      return {
+        symbol,
+        source: "coinmarketcap",
+        timeframe: params.timeframe,
+        candles,
+        indicators: indicatorResult.indicators,
+        diagnostics: params.debug
+          ? {
+              hasCmcApiKey: true,
+              cmcId: params.cmcId,
+              cmcStatus: response.status,
+              parsedLiveHistory: true,
+            }
+          : undefined,
+        warnings: indicatorResult.warnings,
+      };
+    }
+  }
+
+  return createEstimatedHistory(
+    { ...params, symbol },
+    "CoinMarketCap historical OHLCV response did not include parseable candles.",
+  );
 }

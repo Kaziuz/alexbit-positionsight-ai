@@ -15,14 +15,15 @@ The strategy engine receives:
 * Token symbol
 * Entry price
 * Current price
-* Position size
+* Total capital
+* Calculated position size
 * Strategy timeframe: `15m`, `30m`, `1h`, `1d`, `1w`, or `1mo`
 * Timeframe category: `intraday`, `daily`, `weekly`, or `monthly`
 * Analysis interval: same as the selected strategy timeframe
-* Maximum risk percentage
+* Maximum risk percentage, defaulting to a risk-first `1%`
 * Market data source
 * Market quote
-* Technical context, estimated until historical OHLCV is integrated
+* Technical context, calculated from OHLCV when available or estimated when OHLCV is unavailable
 * Risk profile
 
 Example input:
@@ -31,11 +32,12 @@ Example input:
 {
   "symbol": "AVAX",
   "entryPrice": 34,
-  "positionSize": 2,
+  "totalCapital": 1000,
+  "positionSize": 2.6578,
   "strategyTimeframe": "1d",
   "timeframeCategory": "daily",
   "analysisInterval": "1d",
-  "maxRiskPercentage": 3
+  "maxRiskPercentage": 1
 }
 ```
 
@@ -52,7 +54,32 @@ Supported strategy timeframes:
 * `1w`: Higher-timeframe context for more patient trend confirmation.
 * `1mo`: Highest-timeframe context for long-range structure and risk review.
 
-Intraday timeframes are supported for testing and strategy research. The engine does not automatically block them, but it treats them as higher-risk and more speculative. Higher timeframes are better suited to patient, risk-first decisions.
+Intraday timeframes are supported for testing and strategy research. The engine does not automatically block them, but it treats them as higher-risk and more speculative and the UI warns beginners to validate setups on the daily timeframe. Higher timeframes are better suited to patient, risk-first decisions.
+
+---
+
+## Risk-First Position Sizing
+
+PositionSight calculates position size from:
+
+* Total capital
+* Maximum risk percentage
+* Entry price
+* ATR 14 when available
+* Stop distance
+
+The preferred stop distance is `ATR 14 * 1.75`. If ATR is unavailable or invalid, the engine falls back to the existing percent-based stop behavior and records a warning. If the ATR stop would be at or below zero, the stop is clamped to a safe positive value.
+
+The beginner UI presents the compatible `takeProfit` value as a `Trailing exit` reference. The JSON keeps `takeProfit` for backtest compatibility and also includes `trailingExit` metadata:
+
+```json
+{
+  "enabled": true,
+  "method": "atr_ma_trailing",
+  "initialReference": 40.77,
+  "atrMultiple": 1.75
+}
+```
 
 ---
 
@@ -69,10 +96,10 @@ Fields:
 * `strategyType`: One of `trend_following_pullback`, `breakout_with_volume`, `defensive_mean_reversion`, or `no_trade`.
 * `entryCondition`: Human-readable condition for a valid strategy entry.
 * `exitCondition`: Human-readable condition for exit or reduction.
-* `stopLoss`: Suggested stop level based on configured risk.
-* `takeProfit`: Suggested profit target using a simple reward-to-risk multiple.
+* `stopLoss`: Suggested stop level, preferring ATR-based volatility distance when available.
+* `takeProfit`: Compatibility field used as the initial trailing-exit reference.
 * `invalidationLevel`: Price level where the strategy thesis is considered invalid.
-* `riskRules`: Max risk, position size, estimated risk amount, and optional no-trade reason.
+* `riskRules`: Max risk, total capital, calculated position size, stop distance, estimated risk amount, and optional no-trade reason.
 * `dataUsed`: Entry price, current price, 24h change, volume, market cap, data source, and timestamp.
 
 ---
@@ -111,9 +138,10 @@ Top-level fields:
 * `skill`: Metadata for skill name, track, and artifact type.
 * `inputSchema`: Machine-readable description of position inputs, strategy timeframe, and strategy mode.
 * `dataProvenance`: Source, live/mock status, intended live source, and generation timestamp.
-* `chartSeriesType`: Currently `estimated_projection`.
-* `advancedContextType`: Currently `estimated_until_ohlcv`.
+* `chartSeriesType`: `historical_ohlcv` when real candles are available, otherwise `estimated_from_live_quote_context`.
+* `advancedContextType`: `estimated_until_ohlcv` for fields that still depend on unavailable historical data.
 * `dataRequirements`: OHLCV requirements, minimum history, lookback periods, and required indicators.
+* `history`: Historical source, candles used, indicator source, indicators, and indicator warnings.
 * `selectedStrategyMode`: Strategy mode chosen by the user or Auto Recommended.
 * `evaluatedStrategyType`: Strategy type evaluated for the current decision.
 * `finalRiskVerdict`: Machine-readable risk verdict.
@@ -137,7 +165,7 @@ Top-level fields:
   "interval": "1d",
   "minimumHistoryDays": 200,
   "lookbackPeriods": 200,
-  "requiredIndicators": ["ema20", "ema50", "ema200", "rsi14", "atr14", "support", "resistance"]
+  "requiredIndicators": ["ma20", "ma50", "ma200", "rsi14", "atr14", "support", "resistance"]
 }
 ```
 
@@ -160,7 +188,8 @@ It includes:
 * `entryRule`
 * `exitRule`
 * `stopRule`
-* `takeProfitRule`
+* `takeProfitRule`, retained for compatibility and used as the initial trailing-exit reference
+* `trailingExit`
 * `invalidationRule`
 * `positionSizing`
 * `riskManagement`
@@ -225,7 +254,17 @@ When `CMC_API_KEY` is configured and CoinMarketCap responds successfully, `Marke
 
 When the key is missing or the request fails, `MarketContext.source` is `mock` and the route returns deterministic mock data with a fallback warning.
 
-CoinMarketCap latest quote fields are live when `CMC_API_KEY` is configured. The chart path and some advanced context fields are estimated until historical OHLCV is added. Future versions should map historical OHLCV, market-pair liquidity, news/community signals, and other available data into the same `MarketContext` shape.
+The MVP also attempts server-only historical OHLCV through:
+
+```text
+GET /api/history?symbol=ADA&timeframe=1d
+```
+
+When CoinMarketCap historical candles are available, the history response uses `source: "coinmarketcap"` and indicators are calculated from real OHLCV candles. When the API response or plan cannot provide historical candles, the response uses `source: "estimated"` and includes a warning that candles and indicators are estimated from live quote context.
+
+The UI uses `MA 20`, `MA 50`, and `MA 200` labels. Internally, existing EMA-derived fields remain available for backward compatibility, and the export includes MA aliases.
+
+CoinMarketCap latest quote fields are live when `CMC_API_KEY` is configured. Indicators are real only when OHLCV candles are available. Future versions should map market-pair liquidity, news/community signals, and other available data into the same `MarketContext` shape.
 
 ---
 
@@ -258,12 +297,15 @@ The engine does not no-trade solely because the selected timeframe is intraday.
   "entryCondition": "Do not add exposure unless risk is controlled and price stabilizes near support with evidence of a rebound.",
   "exitCondition": "Reduce quickly if price loses the stop level, and only hold for recovery if the selected timeframe confirms support.",
   "stopLoss": 32.98,
-  "takeProfit": 35.84,
+  "takeProfit": 40.77,
   "invalidationLevel": 32.98,
   "riskRules": {
-    "maxRiskPercentage": 3,
-    "positionSize": 2,
-    "estimatedRiskAmount": 2.04
+    "maxRiskPercentage": 1,
+    "totalCapital": 1000,
+    "positionSize": 2.6578,
+    "calculatedPositionSize": 2.6578,
+    "positionSizingMethod": "atr_volatility",
+    "estimatedRiskAmount": 10
   },
   "dataUsed": {
     "entryPrice": 34,

@@ -23,6 +23,14 @@ function roundPrice(value: number) {
   return Number(value.toFixed(2));
 }
 
+const atrStopMultiple = 1.75;
+
+function getPositiveAtr(context: MarketContext | undefined) {
+  const atr = context?.technicals.atr14;
+
+  return typeof atr === "number" && Number.isFinite(atr) && atr > 0 ? atr : undefined;
+}
+
 function isMarketContext(input: MarketQuote | MarketContext): input is MarketContext {
   return "quote" in input && "technicals" in input;
 }
@@ -230,7 +238,7 @@ function copyForStrategy(strategyType: StrategyType) {
       entryCondition:
         "Wait for a confirmed selected-timeframe close or retest above the trend area before treating the pullback as a continuation setup.",
       exitCondition:
-        "Cut the trade at invalidation, take partial profit at target, and trail any runner while price holds above the trend filter.",
+        "Cut the trade at invalidation and use an ATR/MA trailing exit while price holds above the trend filter.",
     },
     breakout_with_volume: {
       entryCondition:
@@ -260,10 +268,26 @@ function buildStrategySpec(
   noTradeReason?: string,
 ): StrategySpec {
   const quote = quoteFromInput(input);
+  const context = isMarketContext(input) ? input : undefined;
   const stopLossDistance = Math.max(position.maxRiskPercentage / 100, 0.01);
-  const rewardDistance = stopLossDistance * 1.8;
-  const stopLoss = roundPrice(position.entryPrice * (1 - stopLossDistance));
-  const takeProfit = roundPrice(position.entryPrice * (1 + rewardDistance));
+  const atr = getPositiveAtr(context);
+  const sizingWarnings: string[] = [];
+  const fallbackStopDistance = position.entryPrice * stopLossDistance;
+  const rawStopDistance = atr ? atr * atrStopMultiple : fallbackStopDistance;
+  const stopDistance = Number.isFinite(rawStopDistance) && rawStopDistance > 0 ? rawStopDistance : fallbackStopDistance;
+  let rawStopLoss = position.entryPrice - stopDistance;
+
+  if (!atr) {
+    sizingWarnings.push("ATR is unavailable or estimated, so percent-based stop fallback is used.");
+  }
+
+  if (!Number.isFinite(rawStopLoss) || rawStopLoss <= 0) {
+    rawStopLoss = Math.max(position.entryPrice * 0.01, 0.00000001);
+    sizingWarnings.push("ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.");
+  }
+
+  const stopLoss = roundPrice(rawStopLoss);
+  const takeProfit = roundPrice(position.entryPrice + stopDistance * 1.8);
   const invalidationLevel = strategyType === "defensive_mean_reversion" ? stopLoss : roundPrice(stopLoss * 0.995);
   const estimatedRiskAmount = roundPrice(Math.abs(position.entryPrice - stopLoss) * position.positionSize);
   const copy = copyForStrategy(strategyType);
@@ -282,8 +306,14 @@ function buildStrategySpec(
     riskRules: {
       maxRiskPercentage: position.maxRiskPercentage,
       positionSize: position.positionSize,
+      totalCapital: position.totalCapital,
+      calculatedPositionSize: position.positionSize,
+      positionSizingMethod: atr ? "atr_volatility" : "percent_fallback",
+      stopDistance: roundPrice(Math.abs(position.entryPrice - stopLoss)),
+      atrMultiple: atrStopMultiple,
       estimatedRiskAmount,
       noTradeReason: noTradeReason ?? (strategyType === "no_trade" ? getNoTradeReason(position, input) : undefined),
+      warnings: sizingWarnings.length ? sizingWarnings : undefined,
     },
     dataUsed: {
       entryPrice: position.entryPrice,
