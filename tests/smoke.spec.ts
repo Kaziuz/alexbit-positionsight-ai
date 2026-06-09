@@ -1,4 +1,75 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function getExportJson(page: Page) {
+  await expect(page.locator("pre")).toContainText('"schemaVersion"');
+
+  return JSON.parse(await page.locator("pre").innerText()) as {
+    schemaVersion?: string;
+    skill?: unknown;
+    inputSchema?: unknown;
+    dataProvenance?: unknown;
+    dataRequirements?: unknown;
+    strategySpec?: {
+      dataUsed?: { currentPrice?: number };
+      strategyType?: string;
+    };
+    strategyDecision?: {
+      positionIntent?: string;
+      finalRiskVerdict?: string;
+      riskBadge?: string;
+      sizingMode?: string;
+      stopStatus?: string;
+      shouldAddExposure?: boolean;
+      shouldExitPosition?: boolean;
+    };
+    marketContext?: unknown;
+    backtestSpec?: {
+      signal?: string;
+      shouldOpenPosition?: boolean;
+      allowShort?: boolean;
+      sizingMode?: string;
+      positionSizingMode?: string;
+    };
+    backtestResult?: {
+      backtestSource?: string;
+      candlesUsed?: number;
+      limitations?: string[];
+    };
+    executionAssumptions?: { allowShort?: boolean };
+    evaluationMetrics?: unknown;
+    validation?: { limitations?: string[] };
+    positionIntent?: string;
+    intentAction?: string;
+    riskBadge?: string;
+    riskVerdict?: string;
+    strategyTimeframe?: string;
+    timeframeCategory?: string;
+    analysisInterval?: string;
+    sizingMode?: string;
+    positionSizingMode?: string;
+    allowShort?: boolean;
+    sellReviewMeaning?: string;
+    history?: {
+      indicators?: {
+        ma20?: number | null;
+        ma50?: number | null;
+        ma200?: number | null;
+        rsi14?: number | null;
+        atr14?: number | null;
+        averageVolume?: number | null;
+        support?: number | null;
+        resistance?: number | null;
+      };
+    };
+  };
+}
+
+async function selectAda(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
+  await page.locator("select").selectOption("ADA");
+  await expect(page.locator("pre")).toContainText('"asset": "ADA"');
+}
 
 test("home page loads", async ({ page }) => {
   await page.goto("/");
@@ -19,6 +90,8 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
   await expect(page.getByText("Ajuste de estrategia", { exact: true })).toBeVisible();
   await expect(page.getByText("Modo de tamaño", { exact: true })).toBeVisible();
+  await expect(page.getByText("Backtest simple", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fuente del backtest", { exact: true })).toBeVisible();
   await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
@@ -97,6 +170,11 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.getByText("Strategy fit", { exact: true })).toBeVisible();
   await expect(page.getByText("Stop status", { exact: true })).toBeVisible();
   await expect(page.getByText("Position size mode", { exact: true })).toBeVisible();
+  await expect(page.getByText("Simple Backtest", { exact: true })).toBeVisible();
+  await expect(page.getByText("Backtest source", { exact: true })).toBeVisible();
+  await expect(page.getByText("Candles used", { exact: true })).toBeVisible();
+  await expect(page.getByText("Result", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Historical CMC|Estimated from live quote|Demo dataset/).first()).toBeVisible();
   await expect(page.getByText("Add exposure allowed", { exact: true })).toBeVisible();
   await expect(page.getByText("Reduce/exit recommended", { exact: true })).toBeVisible();
   await expect(page.getByText("This checks whether a new entry is worth planning.", { exact: true })).toBeVisible();
@@ -109,6 +187,9 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.locator("pre")).toContainText('"totalCapital"');
   await expect(page.locator("pre")).toContainText('"calculatedPositionSize"');
   await expect(page.locator("pre")).toContainText('"trailingExit"');
+  await expect(page.locator("pre")).toContainText('"backtestResult"');
+  await expect(page.locator("pre")).toContainText('"backtestSource"');
+  await expect(page.locator("pre")).toContainText('"candlesUsed"');
 
   await page.getByRole("button", { name: "Manage open position", exact: true }).click();
   await expect(page.getByText("Average entry price", { exact: true }).first()).toBeVisible();
@@ -180,4 +261,115 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   });
   const dataNoteCount = nonJsonText.split(dataNoteSentence).length - 1;
   expect(dataNoteCount).toBeLessThanOrEqual(1);
+});
+
+test("day 7 and day 8 targeted ADA QA scenarios", async ({ page }) => {
+  await selectAda(page);
+
+  let payload = await getExportJson(page);
+  const currentPrice = payload.strategySpec?.dataUsed?.currentPrice;
+  expect(typeof currentPrice).toBe("number");
+
+  await page.locator('input[type="text"]').first().fill(String(currentPrice));
+  payload = await getExportJson(page);
+
+  for (const key of [
+    "schemaVersion",
+    "skill",
+    "inputSchema",
+    "dataProvenance",
+    "dataRequirements",
+    "strategySpec",
+    "strategyDecision",
+    "marketContext",
+    "backtestSpec",
+    "backtestResult",
+    "executionAssumptions",
+    "evaluationMetrics",
+    "validation",
+  ] as const) {
+    expect(payload[key]).toBeTruthy();
+  }
+
+  expect(payload.positionIntent).toBe("analyze_entry");
+  expect(payload.strategyDecision?.positionIntent).toBe("analyze_entry");
+  expect(payload.strategyTimeframe).toBe("1d");
+  expect(payload.timeframeCategory).toBe("daily");
+  expect(payload.analysisInterval).toBe("1d");
+  expect(payload.allowShort).toBe(false);
+  expect(payload.executionAssumptions?.allowShort).toBe(false);
+  expect(payload.backtestSpec?.allowShort).toBe(false);
+  expect(["low", "medium", "high", "no_trade"]).toContain(payload.riskBadge);
+  expect(["historical_cmc", "estimated_from_live_quote", "demo_dataset"]).toContain(payload.backtestResult?.backtestSource);
+  expect(payload.backtestResult?.candlesUsed).toBeGreaterThan(0);
+  for (const key of ["ma20", "ma50", "ma200", "rsi14", "atr14", "averageVolume", "support", "resistance"] as const) {
+    expect(payload.history?.indicators).toHaveProperty(key);
+  }
+
+  await page.locator('input[type="text"]').first().fill(String((currentPrice ?? 1) * 10));
+  payload = await getExportJson(page);
+  expect(payload.positionIntent).toBe("analyze_entry");
+  expect(payload.riskBadge).toBe("no_trade");
+  expect(payload.strategyDecision?.finalRiskVerdict).toBe("no_trade_recommended");
+  await expect(page.getByText("Entry price is very far from current price", { exact: false }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Manage open position", exact: true }).click();
+  await page.locator('input[type="text"]').nth(2).fill("25");
+  payload = await getExportJson(page);
+  expect(payload.positionIntent).toBe("manage_open_position");
+  expect(payload.sizingMode ?? payload.positionSizingMode).toBe("existing_position");
+  expect(payload.backtestSpec?.sizingMode ?? payload.backtestSpec?.positionSizingMode).toBe("existing_position");
+  expect(payload.strategyDecision?.shouldAddExposure).toBe(false);
+  expect(payload.strategyDecision?.stopStatus).toBe("stop_breached");
+  expect(payload.strategyDecision?.shouldExitPosition).toBe(true);
+  await expect(page.getByText("This checks whether an open position should be held, reduced, or protected.", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "1mo", exact: true }).click();
+  await expect(page.getByRole("application").getByText("3mo ago", { exact: true })).toBeVisible();
+  payload = await getExportJson(page);
+  expect(payload.strategyTimeframe).toBe("1mo");
+  expect(payload.positionIntent).toBe("manage_open_position");
+
+  await page.getByRole("button", { name: "Exit / Sell review", exact: true }).click();
+  await page.getByRole("button", { name: "1d", exact: true }).click();
+  payload = await getExportJson(page);
+  expect(payload.positionIntent).toBe("exit_review");
+  expect(payload.allowShort).toBe(false);
+  expect(payload.sellReviewMeaning).toContain("short selling is out of scope");
+  expect(["REDUCE", "EXIT", "ABSTAIN", "HOLD"]).toContain(payload.backtestSpec?.signal);
+  expect(["LONG", "CONDITIONAL_LONG"]).not.toContain(payload.backtestSpec?.signal);
+  await expect(page.getByText("This checks whether the position should be reduced, exited, or monitored.", { exact: true })).toBeVisible();
+
+  const timeframeChecks: Array<[string, string[]]> = [
+    ["15m", ["-45m", "+30m"]],
+    ["30m", ["-90m", "+1h"]],
+    ["1h", ["-3h", "+2h"]],
+    ["1d", ["-3d", "+2d"]],
+    ["1w", ["4w ago", "+2w"]],
+    ["1mo", ["3mo ago", "+2mo"]],
+  ];
+
+  for (const [timeframe, labels] of timeframeChecks) {
+    await page.getByRole("button", { name: timeframe, exact: true }).click();
+    for (const label of labels) {
+      await expect(page.getByRole("application").getByText(label, { exact: true })).toBeVisible();
+    }
+  }
+
+  await page.getByRole("button", { name: "15m", exact: true }).click();
+  await expect(page.getByText("Intraday trading is more speculative", { exact: false })).toBeVisible();
+  await expect(page.getByText("Stop", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Entry", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Current", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Trailing Exit", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("MA 20", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("MA 50", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("MA 200", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("EMA 20", { exact: true })).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
+
+  await page.getByRole("button", { name: "Español" }).click();
+  await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Backtest simple", { exact: true })).toBeVisible();
+  await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
 });

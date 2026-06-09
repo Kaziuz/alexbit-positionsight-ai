@@ -97,6 +97,17 @@ export const translations = {
     beginnerNote: "Beginner note:",
     noTradeReason: "No-trade reason",
     warnings: "Warnings",
+    simpleBacktest: "Simple Backtest",
+    backtestSource: "Backtest source",
+    candlesUsed: "Candles used",
+    entryTriggered: "Entry triggered",
+    stopHit: "Stop hit",
+    trailingExitHit: "Trailing exit hit",
+    backtestResult: "Result",
+    returnPercentage: "Return %",
+    estimatedPnl: "Estimated P/L",
+    maxDrawdown: "Max drawdown",
+    limitations: "Limitations",
     stopLoss: "Stop loss",
     takeProfit: "Take profit",
     trailingExit: "Trailing exit",
@@ -182,6 +193,17 @@ export const translations = {
       medium: "Medium",
       high: "High",
       no_trade: "No Trade",
+    },
+    backtestSourceLabels: {
+      historical_cmc: "Historical CMC",
+      demo_dataset: "Demo dataset",
+      estimated_from_live_quote: "Estimated from live quote",
+    },
+    winLossLabels: {
+      win: "Win",
+      loss: "Loss",
+      flat: "Flat",
+      not_triggered: "Not triggered",
     },
     sizingModeLabels: {
       calculated_new_entry: "Calculated new entry",
@@ -398,6 +420,16 @@ export const translations = {
         "A breached stop means the position is no longer healthy under this risk model. This is not a fresh entry setup.",
       "Sell review means protecting an existing long position. It does not open a short position or execute a sale.":
         "Sell review means protecting an existing long position. It does not open a short position or execute a sale.",
+      "Simple deterministic backtest v1; not a professional trading simulator.":
+        "Simple deterministic backtest v1; not a professional trading simulator.",
+      "No live execution, no wallet connection, and no exchange order placement.":
+        "No live execution, no wallet connection, and no exchange order placement.",
+      "Uses CoinMarketCap historical OHLCV candles when available; execution order inside each candle is simplified.":
+        "Uses CoinMarketCap historical OHLCV candles when available; execution order inside each candle is simplified.",
+      "Historical OHLCV is unavailable on the current response or plan; candles are estimated from live quote context.":
+        "Historical OHLCV is unavailable on the current response or plan; candles are estimated from live quote context.",
+      "No history response was available in the UI; a small demo dataset was generated for illustration only.":
+        "No history response was available in the UI; a small demo dataset was generated for illustration only.",
     },
     decisionCopy: {
       autoWhy: "Auto Recommended selected the strongest fit for the current context:",
@@ -603,6 +635,17 @@ export const translations = {
     beginnerNote: "Nota para principiantes:",
     noTradeReason: "Razón para no operar",
     warnings: "Advertencias",
+    simpleBacktest: "Backtest simple",
+    backtestSource: "Fuente del backtest",
+    candlesUsed: "Velas usadas",
+    entryTriggered: "Entrada activada",
+    stopHit: "Stop tocado",
+    trailingExitHit: "Salida dinámica tocada",
+    backtestResult: "Resultado",
+    returnPercentage: "Retorno %",
+    estimatedPnl: "P/G estimada",
+    maxDrawdown: "Drawdown máximo",
+    limitations: "Limitaciones",
     stopLoss: "Stop loss",
     takeProfit: "Toma de ganancia",
     trailingExit: "Salida dinámica",
@@ -688,6 +731,17 @@ export const translations = {
       medium: "Medio",
       high: "Alto",
       no_trade: "No operar",
+    },
+    backtestSourceLabels: {
+      historical_cmc: "Histórico CMC",
+      demo_dataset: "Dataset demo",
+      estimated_from_live_quote: "Estimado desde cotización en vivo",
+    },
+    winLossLabels: {
+      win: "Ganancia",
+      loss: "Pérdida",
+      flat: "Plano",
+      not_triggered: "No activado",
     },
     sizingModeLabels: {
       calculated_new_entry: "Entrada nueva calculada",
@@ -904,6 +958,16 @@ export const translations = {
         "Un stop perdido significa que la posición ya no está sana bajo este modelo de riesgo. Esto no es un setup de entrada nueva.",
       "Sell review means protecting an existing long position. It does not open a short position or execute a sale.":
         "La revisión de venta significa proteger una posición long existente. No abre una posición corta ni ejecuta una venta.",
+      "Simple deterministic backtest v1; not a professional trading simulator.":
+        "Backtest v1 simple y determinístico; no es un simulador profesional de trading.",
+      "No live execution, no wallet connection, and no exchange order placement.":
+        "Sin ejecución en vivo, sin conexión de wallet y sin colocación de órdenes en exchanges.",
+      "Uses CoinMarketCap historical OHLCV candles when available; execution order inside each candle is simplified.":
+        "Usa velas OHLCV históricas de CoinMarketCap cuando están disponibles; el orden de ejecución dentro de cada vela se simplifica.",
+      "Historical OHLCV is unavailable on the current response or plan; candles are estimated from live quote context.":
+        "OHLCV histórico no está disponible con la respuesta o plan actual; las velas se estiman desde el contexto de cotización en vivo.",
+      "No history response was available in the UI; a small demo dataset was generated for illustration only.":
+        "No hubo respuesta de historial disponible en la UI; se generó un dataset demo pequeño solo para ilustración.",
     },
     decisionCopy: {
       autoWhy: "Auto recomendado eligió el mejor ajuste para el contexto actual:",

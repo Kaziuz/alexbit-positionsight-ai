@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { beginnerTokenSet, eligibleTokenUniverse, eligibleTokensByCategory } from "@/data/eligible-tokens";
+import { runSimpleBacktest } from "@/lib/backtest";
 import { formatCompact, formatCurrency, formatPercentage } from "@/lib/format";
 import { languageLabels, translations, type Language } from "@/lib/i18n";
 import { parseLocalizedNumberInput } from "@/lib/number-input";
@@ -212,6 +213,7 @@ export function PositionStrategyApp() {
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
   const [historyResponse, setHistoryResponse] = useState<HistoryResponse | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
   const t = translations[language];
 
@@ -471,6 +473,8 @@ export function PositionStrategyApp() {
     let isActive = true;
 
     async function fetchHistory() {
+      setIsLoadingHistory(true);
+
       try {
         const response = await fetch(
           `/api/history?symbol=${position.symbol}&timeframe=${position.strategyTimeframe}`,
@@ -492,6 +496,10 @@ export function PositionStrategyApp() {
         if (isActive) {
           setHistoryResponse(null);
         }
+      } finally {
+        if (isActive) {
+          setIsLoadingHistory(false);
+        }
       }
     }
 
@@ -512,6 +520,17 @@ export function PositionStrategyApp() {
 
   const strategy = strategyDecision?.spec ?? null;
   const decisionText = strategyDecision ? getLocalizedDecisionText(strategyDecision, t) : null;
+  const backtestResult =
+    strategyDecision && strategy && quote && normalizedPosition && !isLoadingHistory
+      ? runSimpleBacktest({
+          symbol: normalizedPosition.symbol,
+          position: normalizedPosition,
+          strategy,
+          currentPrice: quote.price,
+          strategyType: strategy.strategyType,
+          history: historyResponse,
+        })
+      : null;
   const pnlPercentage =
     quote && normalizedPosition && isPositionValid
       ? ((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) * 100
@@ -525,7 +544,13 @@ export function PositionStrategyApp() {
   const pricePrecision = quote && quote.price < 1 ? 6 : 2;
   const exportPayload =
     strategyDecision && analysisContext && normalizedPosition
-      ? createStrategyExport(normalizedPosition, strategyDecision, analysisContext, historyResponse ?? undefined)
+      ? createStrategyExport(
+          normalizedPosition,
+          strategyDecision,
+          analysisContext,
+          historyResponse ?? undefined,
+          backtestResult ?? undefined,
+        )
       : null;
   const strategyJson = exportPayload ? JSON.stringify(exportPayload, null, 2) : "";
   const headerMarketMetrics =
@@ -1166,6 +1191,36 @@ export function PositionStrategyApp() {
                   <MetricTile label={t.stopLoss} value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />
                   <MetricTile label={t.trailingExit} value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
                 </div>
+
+                {backtestResult ? (
+                  <div className="mt-4 rounded-md border border-slate-200 bg-panel p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-base font-semibold text-slate-950">{t.simpleBacktest}</div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {t.backtestSourceLabels[backtestResult.backtestSource]}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <MetricTile label={t.backtestSource} value={t.backtestSourceLabels[backtestResult.backtestSource]} />
+                      <MetricTile label={t.candlesUsed} value={String(backtestResult.candlesUsed)} />
+                      <MetricTile label={t.entryTriggered} value={backtestResult.entryTriggered ? t.yes : t.no} />
+                      <MetricTile label={t.stopHit} value={backtestResult.stopHit ? t.yes : t.no} tone={backtestResult.stopHit ? "negative" : "positive"} />
+                      <MetricTile label={t.trailingExitHit} value={backtestResult.trailingExitHit ? t.yes : t.no} tone={backtestResult.trailingExitHit ? "positive" : "default"} />
+                      <MetricTile label={t.backtestResult} value={t.winLossLabels[backtestResult.winLossResult]} tone={backtestResult.winLossResult === "win" ? "positive" : backtestResult.winLossResult === "loss" ? "negative" : "warning"} />
+                      <MetricTile label={t.returnPercentage} value={formatPercentage(backtestResult.grossReturnPercentage)} tone={backtestResult.grossReturnPercentage >= 0 ? "positive" : "negative"} />
+                      <MetricTile label={t.estimatedPnl} value={formatCurrency(backtestResult.estimatedPnL)} tone={backtestResult.estimatedPnL >= 0 ? "positive" : "negative"} />
+                      <MetricTile label={t.maxDrawdown} value={formatPercentage(backtestResult.maxDrawdownPercentage)} tone={backtestResult.maxDrawdownPercentage < 0 ? "negative" : "default"} />
+                    </div>
+                    <div className="mt-3 rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
+                      <div className="font-semibold text-slate-950">{t.limitations}</div>
+                      <ul className="mt-1 list-disc space-y-1 pl-4">
+                        {backtestResult.limitations.map((limitation) => (
+                          <li key={limitation}>{translateMessage(limitation, t)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">

@@ -32,6 +32,8 @@ Use the default state:
 
 Show the chart levels: stop loss, entry, current price, and trailing exit. Invalidation remains in the JSON export for backtesting, but it is hidden from the beginner chart. If CoinMarketCap historical OHLCV is available, point out that indicators can be calculated from historical candles. If it is unavailable, explain that the chart path is estimated and clearly labeled. Then point to the market context card: history source, MA 20/50/200, RSI, ATR, average volume, support, resistance, sentiment, liquidity, and derivatives bias.
 
+Point to the `Simple Backtest` panel. Explain that it uses CoinMarketCap historical candles when available. If historical OHLCV is unavailable on the current plan, it clearly labels the source as estimated from live quote context or demo dataset. This is a simple educational backtest, not a professional simulator.
+
 ### 0:55 - 1:15: Strategy Explanation Cards
 
 Open the explanation card for `Auto Recommended`.
@@ -56,7 +58,7 @@ Select `LINK` and set entry price to `12`.
 
 This creates a large distance between entry and current market price. Auto Recommended should reject the setup or show a poor fit because the entry is too far from current price for a clean risk-managed strategy.
 
-Explain that no-trade is a valid risk-management output, especially for beginners.
+Explain that no-trade is a valid capital-protection output, especially for beginners. In the Simple Backtest panel, note that no-trade records whether entry was not triggered instead of pretending a trade was opened.
 
 ### 1:35 - 1:50: FET Breakout Scenario
 
@@ -103,6 +105,9 @@ The export includes:
 - `shouldReduceExposure`
 - `shouldExitPosition`
 - `allowShort: false`
+- `backtestResult`
+- `backtestSource`
+- `candlesUsed`
 - execution assumptions
 - evaluation metrics
 

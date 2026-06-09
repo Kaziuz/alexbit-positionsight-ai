@@ -1,5 +1,6 @@
 import type {
   BacktestSpec,
+  BacktestResult,
   HistoryResponse,
   MarketContext,
   PositionInput,
@@ -327,6 +328,7 @@ export function createStrategyExport(
   decision: StrategyDecision,
   context: MarketContext,
   history?: HistoryResponse,
+  backtestResult?: BacktestResult,
 ): StrategyExport {
   const historySource = history?.source ?? context.technicals.historySource ?? "estimated";
   const indicatorSource = historySource === "coinmarketcap" ? "coinmarketcap_ohlcv" : "estimated_candles";
@@ -388,6 +390,9 @@ export function createStrategyExport(
     intentVerdict: decision.intentVerdict,
     riskBadge: decision.riskBadge,
     riskVerdict: decision.finalRiskVerdict,
+    strategyTimeframe: position.strategyTimeframe,
+    timeframeCategory: getTimeframeCategory(position.strategyTimeframe),
+    analysisInterval: position.analysisInterval,
     stopStatus: decision.stopStatus,
     shouldAddExposure: decision.shouldAddExposure,
     shouldReduceExposure: decision.shouldReduceExposure,
@@ -403,6 +408,9 @@ export function createStrategyExport(
     noTradeRecommended: decision.noTradeRecommended,
     noTradeReason: decision.noTradeReason,
     backtestSpec: createBacktestSpec(position, decision, context),
+    backtestResult,
+    backtestSource: backtestResult?.backtestSource,
+    candlesUsed: backtestResult?.candlesUsed,
     trailingExit: {
       enabled: true,
       method: "atr_ma_trailing",

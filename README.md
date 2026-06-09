@@ -37,6 +37,7 @@ Because this project does not execute trades and does not deploy or control an o
 - Lets users choose Auto Recommended or a manual strategy mode.
 - Explains each strategy mode with beginner-friendly educational cards.
 - Generates an explainable strategy decision and risk signal.
+- Runs a simple deterministic backtest v1 against historical CMC candles when available, or clearly labeled estimated/demo fallback data.
 - Displays market context, strategy fit, warnings, and next confirmation.
 - Exports a machine-readable backtest-ready JSON artifact.
 
@@ -163,6 +164,9 @@ It includes:
 - `noTradeRecommended`
 - `marketContext`
 - `backtestSpec`
+- `backtestResult`
+- `backtestSource`
+- `candlesUsed`
 - `executionAssumptions`
 - `evaluationMetrics`
 - `validation`
@@ -186,6 +190,7 @@ The export preserves both human-readable strategy explanations and machine-reada
 - Beginner-friendly strategy explanation cards.
 - Risk visualization.
 - Strategy signal panel.
+- Simple Backtest panel.
 - Market context panel.
 - Backtest-ready JSON export.
 - Data provenance.
@@ -207,6 +212,8 @@ The export preserves both human-readable strategy explanations and machine-reada
 - Historical OHLCV is attempted from CoinMarketCap when `CMC_API_KEY` is configured and the API plan allows it.
 - Indicators are real only when historical OHLCV candles are available.
 - Estimated candles and indicators are fallback-only when OHLCV is unavailable.
+- Simple Backtest v1 is deterministic and educational; it is not a professional trading simulator.
+- Backtest source is labeled as `historical_cmc`, `estimated_from_live_quote`, or `demo_dataset`.
 - Strategy analysis supports 15m, 30m, 1h, 1d, 1w, and 1mo contexts.
 - Intraday timeframes are supported for testing and research, but the engine treats them with more caution and does not encourage overtrading.
 - Historical OHLCV access depends on the CoinMarketCap plan; estimated candles and indicators remain clearly labeled when OHLCV is unavailable.

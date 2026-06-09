@@ -74,6 +74,8 @@ export type OhlcvCandle = {
 };
 
 export type HistorySource = "coinmarketcap" | "estimated";
+export type BacktestSource = "historical_cmc" | "demo_dataset" | "estimated_from_live_quote";
+export type BacktestWinLossResult = "win" | "loss" | "flat" | "not_triggered";
 
 export type TechnicalIndicators = {
   ema20: number | null;
@@ -292,6 +294,24 @@ export type BacktestSpec = {
   riskManagement: Record<string, unknown>;
 };
 
+export type BacktestResult = {
+  backtestSource: BacktestSource;
+  candlesUsed: number;
+  startDate?: string;
+  endDate?: string;
+  entryTriggered: boolean;
+  exitTriggered: boolean;
+  stopHit: boolean;
+  trailingExitHit: boolean;
+  finalPrice: number;
+  grossReturnPercentage: number;
+  estimatedPnL: number;
+  maxDrawdownPercentage: number;
+  winLossResult: BacktestWinLossResult;
+  notes: string[];
+  limitations: string[];
+};
+
 export type StrategyExport = {
   schemaVersion: "1.0.0";
   skill: {
@@ -330,6 +350,9 @@ export type StrategyExport = {
   intentVerdict?: IntentVerdict;
   riskBadge?: RiskBadge;
   riskVerdict?: RiskVerdict;
+  strategyTimeframe?: StrategyTimeframe;
+  timeframeCategory?: TimeframeCategory;
+  analysisInterval?: StrategyTimeframe;
   stopStatus?: StopStatus;
   positionSizingMode?: SizingMode;
   existingPositionSize?: number;
@@ -352,6 +375,9 @@ export type StrategyExport = {
   noTradeRecommended: boolean;
   noTradeReason?: string;
   backtestSpec: BacktestSpec;
+  backtestResult?: BacktestResult;
+  backtestSource?: BacktestSource;
+  candlesUsed?: number;
   executionAssumptions: {
     initialCapital: 10000;
     feesBps: 10;

@@ -188,6 +188,9 @@ Top-level fields:
 * `noTradeRecommended`: Boolean flag for abstain/no-trade recommendation.
 * `noTradeReason`: Optional abstain/no-trade reason.
 * `backtestSpec`: Machine-readable strategy contract.
+* `backtestResult`: Simple deterministic backtest v1 result.
+* `backtestSource`: `historical_cmc`, `estimated_from_live_quote`, or `demo_dataset`.
+* `candlesUsed`: Number of candles used by the simple backtest.
 * `executionAssumptions`: Starting capital, fees, slippage, order type, and no-short/no-leverage constraints.
 * `evaluationMetrics`: Metrics a backtest runner should calculate.
 * `validation`: Backtest readiness and limitations.
@@ -238,6 +241,18 @@ It includes:
 For intraday selections, `backtestSpec.warning` notes that shorter timeframes require stronger confirmation and may be more speculative.
 
 For `manage_open_position` and `exit_review`, `shouldOpenPosition` remains `false`; the artifact reviews hold/reduce/exit conditions and does not create execution instructions. `EXIT` and `REDUCE` mean long-position risk review outcomes, not short selling.
+
+### Simple Backtest V1
+
+`backtestResult` is a small deterministic evaluation of the generated strategy. It is designed for hackathon demonstration and backtest artifact completeness, not professional trade simulation.
+
+Sources:
+
+* `historical_cmc`: Uses CoinMarketCap historical OHLCV candles when available.
+* `estimated_from_live_quote`: Uses estimated candles from live quote context when historical OHLCV is unavailable.
+* `demo_dataset`: Uses a small documented demo series only when no history response is available in the UI.
+
+The result records entry trigger, stop hit, trailing-exit hit, final price, gross return percentage, estimated P/L, max drawdown, win/loss result, notes, and limitations.
 
 ### No-Trade As ABSTAIN
 
