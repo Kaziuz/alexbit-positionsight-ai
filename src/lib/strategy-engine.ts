@@ -6,6 +6,7 @@ import type {
   IntentVerdict,
   PositionIntent,
   PositionInput,
+  RiskBadge,
   StrategyDecision,
   StrategyFit,
   StrategyMode,
@@ -563,6 +564,43 @@ function getRiskVerdict(requestedType: StrategyType, autoType: StrategyType, fit
   return "good";
 }
 
+function getRiskBadge(
+  position: PositionInput,
+  input: MarketQuote | MarketContext,
+  spec: StrategySpec,
+  finalRiskVerdict: RiskVerdict,
+  fit: StrategyFit,
+): RiskBadge {
+  const quote = quoteFromInput(input);
+  const context = isMarketContext(input) ? input : undefined;
+  const timeframe = getTimeframeProfile(position.strategyTimeframe);
+  const absoluteMoveFromEntry = Math.abs(((quote.price - position.entryPrice) / position.entryPrice) * 100);
+  const priceTooFar = absoluteMoveFromEntry > position.maxRiskPercentage * timeframe.entryDistanceMultiplier;
+  const trendSupportsSetup =
+    !context ||
+    (context.technicals.trendState !== "bearish" &&
+      context.orderBook.liquidityScore >= timeframe.minLiquidityScore &&
+      context.sentiment.label !== "bearish");
+
+  if (spec.strategyType === "no_trade" || finalRiskVerdict === "no_trade_recommended") {
+    return "no_trade";
+  }
+
+  if (position.maxRiskPercentage > 1 || priceTooFar || spec.riskRules.stopStatus === "stop_breached") {
+    return "high";
+  }
+
+  if (finalRiskVerdict === "needs_confirmation" || fit === "caution") {
+    return "medium";
+  }
+
+  if (finalRiskVerdict === "good" && fit === "good" && trendSupportsSetup) {
+    return "low";
+  }
+
+  return "medium";
+}
+
 function evaluateRequestedStrategy(
   position: PositionInput,
   input: MarketQuote | MarketContext,
@@ -688,9 +726,11 @@ export function generateStrategyDecision(
   const mergedWarnings = [...evaluation.warnings, ...intentDecision.warnings].filter(
     (warning, index, warnings) => warnings.indexOf(warning) === index,
   );
+  const riskBadge = getRiskBadge(position, input, spec, finalRiskVerdict, evaluation.fit);
 
   spec.riskRules.intentAction = intentDecision.intentAction;
   spec.riskRules.intentVerdict = intentDecision.intentVerdict;
+  spec.riskRules.riskBadge = riskBadge;
   spec.riskRules.stopStatus = intentDecision.stopStatus;
   spec.riskRules.shouldAddExposure = intentDecision.shouldAddExposure;
   spec.riskRules.shouldReduceExposure = intentDecision.shouldReduceExposure;
@@ -708,6 +748,7 @@ export function generateStrategyDecision(
     positionIntent: position.positionIntent,
     intentAction: intentDecision.intentAction,
     intentVerdict: intentDecision.intentVerdict,
+    riskBadge,
     stopStatus: intentDecision.stopStatus,
     shouldAddExposure: intentDecision.shouldAddExposure,
     shouldReduceExposure: intentDecision.shouldReduceExposure,

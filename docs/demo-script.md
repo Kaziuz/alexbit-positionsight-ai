@@ -94,9 +94,11 @@ The export includes:
 - `analysisInterval`
 - `evaluatedStrategyType`
 - `finalRiskVerdict`
+- `riskBadge`
 - `noTradeRecommended`
 - `intentAction`
 - `stopStatus`
+- `positionSizingMode`
 - `shouldAddExposure`
 - `shouldReduceExposure`
 - `shouldExitPosition`

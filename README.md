@@ -145,10 +145,15 @@ It includes:
 - `positionIntent`
 - `intentAction`
 - `intentVerdict`
+- `riskBadge`
+- `riskVerdict`
 - `stopStatus`
 - `shouldAddExposure`
 - `shouldReduceExposure`
 - `shouldExitPosition`
+- `positionSizingMode`
+- `calculatedPositionSize`
+- `existingPositionSize` when managing or reviewing an existing position
 - `allowShort: false`
 - `strategySpec`
 - `strategyDecision`

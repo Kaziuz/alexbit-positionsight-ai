@@ -137,6 +137,7 @@ The UI exports a richer `StrategyDecision` wrapper around `StrategySpec`.
 * `selectedStrategyMode`: Same selected mode, repeated for export consumers.
 * `evaluatedStrategyType`: The strategy type currently being evaluated in the UI.
 * `finalRiskVerdict`: `good`, `needs_confirmation`, `poor_fit`, or `no_trade_recommended`.
+* `riskBadge`: `low`, `medium`, `high`, or `no_trade` panel/export classification.
 * `intentAction`: `evaluate_entry`, `wait_for_confirmation`, `hold_with_trailing_exit`, `reduce_risk`, `exit_or_reduce`, `stop_breached`, or `no_trade`.
 * `intentVerdict`: Entry, hold, reduce, exit-review, wait, or no-trade verdict.
 * `stopStatus`: `above_stop`, `near_stop`, or `stop_breached`.
@@ -145,6 +146,7 @@ The UI exports a richer `StrategyDecision` wrapper around `StrategySpec`.
 * `shouldExitPosition`: Whether the existing long position should be treated as an exit review.
 * `allowShort`: Always `false`.
 * `sizingMode`: `calculated_new_entry` or `existing_position`.
+* `positionSizingMode`: Export alias for `sizingMode`.
 * `chartMode`: Entry validation, position management, or exit review.
 * `noTradeRecommended`: Boolean risk verdict flag.
 * `noTradeReason`: Optional reason shown when the risk engine recommends no-trade.
@@ -174,7 +176,10 @@ Top-level fields:
 * `dataRequirements`: OHLCV requirements, minimum history, lookback periods, and required indicators.
 * `positionIntent`: Selected non-executing user intent.
 * `intentAction`, `intentVerdict`, and `stopStatus`: Intent-aware decision metadata.
+* `riskBadge` and `riskVerdict`: Beginner-facing risk classification and machine-readable verdict.
 * `shouldAddExposure`, `shouldReduceExposure`, and `shouldExitPosition`: Long-only exposure management flags.
+* `positionSizingMode`: `calculated_new_entry` for entry planning or `existing_position` for manage/exit review.
+* `calculatedPositionSize` or `existingPositionSize`: Size context used for the current intent.
 * `allowShort`: Always `false`.
 * `history`: Historical source, candles used, indicator source, indicators, and indicator warnings.
 * `selectedStrategyMode`: Strategy mode chosen by the user or Auto Recommended.

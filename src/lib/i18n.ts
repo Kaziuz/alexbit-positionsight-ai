@@ -74,6 +74,8 @@ export const translations = {
     strategyEvaluated: "Strategy evaluated",
     selectedStrategy: "Selected strategy",
     riskVerdict: "Risk verdict",
+    riskBadge: "Risk badge",
+    strategyFit: "Strategy fit",
     intentAction: "Intent action",
     stopStatus: "Stop status",
     suggestedAction: "Suggested action:",
@@ -87,6 +89,7 @@ export const translations = {
     user: "User",
     estimatedRisk: "Estimated risk",
     dataSource: "Data source",
+    positionSizeMode: "Position size mode",
     whyThisStrategy: "Why this strategy?",
     entryCondition: "Entry condition:",
     decisionCondition: "Decision condition:",
@@ -171,8 +174,23 @@ export const translations = {
     },
     fitLabels: {
       good: "Good",
-      caution: "Caution",
+      caution: "Warning",
       poor: "Poor",
+    },
+    riskBadgeLabels: {
+      low: "Low",
+      medium: "Medium",
+      high: "High",
+      no_trade: "No Trade",
+    },
+    sizingModeLabels: {
+      calculated_new_entry: "Calculated new entry",
+      existing_position: "Existing position",
+    },
+    intentPanelExplanations: {
+      analyze_entry: "This checks whether a new entry is worth planning.",
+      manage_open_position: "This checks whether an open position should be held, reduced, or protected.",
+      exit_review: "This checks whether the position should be reduced, exited, or monitored.",
     },
     riskVerdictLabels: {
       good: "Good fit",
@@ -562,6 +580,8 @@ export const translations = {
     strategyEvaluated: "Estrategia evaluada",
     selectedStrategy: "Estrategia seleccionada",
     riskVerdict: "Veredicto de riesgo",
+    riskBadge: "Nivel de riesgo",
+    strategyFit: "Ajuste de estrategia",
     intentAction: "Acción de intención",
     stopStatus: "Estado del stop",
     suggestedAction: "Acción sugerida:",
@@ -575,6 +595,7 @@ export const translations = {
     user: "Usuario",
     estimatedRisk: "Riesgo estimado",
     dataSource: "Fuente de datos",
+    positionSizeMode: "Modo de tamaño",
     whyThisStrategy: "¿Por qué esta estrategia?",
     entryCondition: "Condición de entrada:",
     decisionCondition: "Condición de decisión:",
@@ -659,8 +680,23 @@ export const translations = {
     },
     fitLabels: {
       good: "Bueno",
-      caution: "Precaución",
+      caution: "Advertencia",
       poor: "Pobre",
+    },
+    riskBadgeLabels: {
+      low: "Bajo",
+      medium: "Medio",
+      high: "Alto",
+      no_trade: "No operar",
+    },
+    sizingModeLabels: {
+      calculated_new_entry: "Entrada nueva calculada",
+      existing_position: "Posición existente",
+    },
+    intentPanelExplanations: {
+      analyze_entry: "Esto revisa si vale la pena planear una entrada nueva.",
+      manage_open_position: "Esto revisa si una posición abierta debe mantenerse, reducirse o protegerse.",
+      exit_review: "Esto revisa si la posición debe reducirse, cerrarse o monitorearse.",
     },
     riskVerdictLabels: {
       good: "Buen ajuste",

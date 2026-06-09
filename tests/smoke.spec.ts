@@ -16,6 +16,10 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Analizar entrada", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Gestionar posición abierta", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Revisar salida / venta", exact: true })).toBeVisible();
+  await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ajuste de estrategia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Modo de tamaño", { exact: true })).toBeVisible();
+  await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
@@ -73,6 +77,7 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.locator("pre")).toContainText('"strategyTimeframe": "1d"');
   await expect(page.locator("pre")).toContainText('"positionIntent": "analyze_entry"');
   await expect(page.locator("pre")).toContainText('"intentAction"');
+  await expect(page.locator("pre")).toContainText('"riskBadge"');
   await expect(page.locator("pre")).toContainText('"stopStatus"');
   await expect(page.locator("pre")).toContainText('"shouldAddExposure"');
   await expect(page.locator("pre")).toContainText('"shouldReduceExposure"');
@@ -88,9 +93,13 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(calculatedSizeInput).toBeVisible();
   await expect(page.getByText("Calculated position size", { exact: true })).toBeVisible();
   await expect(page.getByText("Intent action", { exact: true })).toBeVisible();
+  await expect(page.getByText("Risk badge", { exact: true })).toBeVisible();
+  await expect(page.getByText("Strategy fit", { exact: true })).toBeVisible();
   await expect(page.getByText("Stop status", { exact: true })).toBeVisible();
+  await expect(page.getByText("Position size mode", { exact: true })).toBeVisible();
   await expect(page.getByText("Add exposure allowed", { exact: true })).toBeVisible();
   await expect(page.getByText("Reduce/exit recommended", { exact: true })).toBeVisible();
+  await expect(page.getByText("This checks whether a new entry is worth planning.", { exact: true })).toBeVisible();
   await expect(page.getByText("Entry", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Current", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Stop", { exact: true }).first()).toBeVisible();
@@ -107,7 +116,9 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.locator('input[type="text"]').nth(2)).not.toHaveAttribute("readonly", "");
   await expect(page.locator("pre")).toContainText('"positionIntent": "manage_open_position"');
   await expect(page.locator("pre")).toContainText('"sizingMode": "existing_position"');
+  await expect(page.locator("pre")).toContainText('"positionSizingMode": "existing_position"');
   await expect(page.locator("pre")).toContainText('"shouldAddExposure": false');
+  await expect(page.getByText("This checks whether an open position should be held, reduced, or protected.", { exact: true })).toBeVisible();
 
   await page.locator('input[type="text"]').first().fill("100");
   await expect(page.getByText("Stop breached", { exact: false }).first()).toBeVisible();
@@ -120,9 +131,11 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.getByText("Decision condition:", { exact: true })).toBeVisible();
   await expect(page.getByText("Exit review:", { exact: false })).toBeVisible();
   await expect(page.locator("pre")).toContainText('"positionIntent": "exit_review"');
+  await expect(page.getByText("This checks whether the position should be reduced, exited, or monitored.", { exact: true })).toBeVisible();
   await expect(page.locator("pre")).toContainText('"shouldOpenPosition": false');
   await expect(page.locator("pre")).toContainText('"allowShort": false');
   await expect(page.locator("pre")).toContainText('"sellReviewMeaning"');
+  await expect(page.locator("pre")).toContainText('"backtestSpec"');
 
   await page.locator('input[type="range"]').fill("2");
   await expect(page.getByText("Risk above 1% is aggressive", { exact: false })).toBeVisible();

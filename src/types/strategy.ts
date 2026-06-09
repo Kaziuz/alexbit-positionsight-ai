@@ -37,6 +37,7 @@ export type ChartMode = "entry_validation" | "position_management" | "exit_revie
 
 export type StrategyFit = "good" | "caution" | "poor";
 export type RiskVerdict = "good" | "needs_confirmation" | "poor_fit" | "no_trade_recommended";
+export type RiskBadge = "low" | "medium" | "high" | "no_trade";
 
 export type TokenCategory =
   | "Main Assets"
@@ -193,6 +194,7 @@ export type StrategySpec = {
     positionIntent: PositionIntent;
     intentAction?: IntentAction;
     intentVerdict?: IntentVerdict;
+    riskBadge?: RiskBadge;
     stopStatus?: StopStatus;
     shouldAddExposure?: boolean;
     shouldReduceExposure?: boolean;
@@ -227,6 +229,7 @@ export type StrategyDecision = {
   positionIntent: PositionIntent;
   intentAction: IntentAction;
   intentVerdict: IntentVerdict;
+  riskBadge: RiskBadge;
   stopStatus: StopStatus;
   shouldAddExposure: boolean;
   shouldReduceExposure: boolean;
@@ -256,6 +259,7 @@ export type BacktestSpec = {
   positionIntent: PositionIntent;
   intentAction?: IntentAction;
   intentVerdict?: IntentVerdict;
+  riskBadge?: RiskBadge;
   stopStatus?: StopStatus;
   shouldAddExposure?: boolean;
   shouldReduceExposure?: boolean;
@@ -263,6 +267,7 @@ export type BacktestSpec = {
   allowShort?: false;
   sellReviewMeaning?: string;
   sizingMode?: SizingMode;
+  positionSizingMode?: SizingMode;
   chartMode?: ChartMode;
   strategyType: StrategyType;
   strategyTimeframe: StrategyTimeframe;
@@ -323,7 +328,11 @@ export type StrategyExport = {
   positionIntent: PositionIntent;
   intentAction?: IntentAction;
   intentVerdict?: IntentVerdict;
+  riskBadge?: RiskBadge;
+  riskVerdict?: RiskVerdict;
   stopStatus?: StopStatus;
+  positionSizingMode?: SizingMode;
+  existingPositionSize?: number;
   shouldAddExposure?: boolean;
   shouldReduceExposure?: boolean;
   shouldExitPosition?: boolean;

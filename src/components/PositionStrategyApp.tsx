@@ -24,6 +24,7 @@ import type {
   HistoryResponse,
   PositionIntent,
   PositionInput,
+  RiskBadge,
   RiskVerdict,
   StrategyDecision,
   StrategyMode,
@@ -89,6 +90,18 @@ function getRiskVerdictTone(verdict: RiskVerdict) {
   }
 
   if (verdict === "needs_confirmation") {
+    return "warning";
+  }
+
+  return "negative";
+}
+
+function getRiskBadgeTone(badge: RiskBadge) {
+  if (badge === "low") {
+    return "positive";
+  }
+
+  if (badge === "medium") {
     return "warning";
   }
 
@@ -1056,6 +1069,16 @@ export function PositionStrategyApp() {
                     value={t.positionIntentLabels[strategyDecision.positionIntent]}
                   />
                   <MetricTile
+                    label={t.riskBadge}
+                    value={t.riskBadgeLabels[strategyDecision.riskBadge]}
+                    tone={getRiskBadgeTone(strategyDecision.riskBadge)}
+                  />
+                  <MetricTile
+                    label={t.strategyFit}
+                    value={t.fitLabels[strategyDecision.fit]}
+                    tone={getFitTone(strategyDecision.fit)}
+                  />
+                  <MetricTile
                     label={t.intentAction}
                     value={t.intentActionLabels[strategyDecision.intentAction]}
                     tone={strategyDecision.shouldExitPosition || strategyDecision.shouldReduceExposure ? "warning" : "positive"}
@@ -1071,9 +1094,8 @@ export function PositionStrategyApp() {
                     tone={getRiskVerdictTone(strategyDecision.finalRiskVerdict)}
                   />
                   <MetricTile
-                    label={t.fit}
-                    value={t.fitLabels[strategyDecision.fit]}
-                    tone={getFitTone(strategyDecision.fit)}
+                    label={t.positionSizeMode}
+                    value={t.sizingModeLabels[strategyDecision.sizingMode]}
                   />
                   <MetricTile label={t.selectedBy} value={strategyDecision.selectedBy === "auto" ? t.auto : t.user} />
                   <MetricTile label={t.estimatedRisk} value={formatCurrency(strategy.riskRules.estimatedRiskAmount)} />
@@ -1095,7 +1117,8 @@ export function PositionStrategyApp() {
 
                 <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
                   <div className="font-semibold text-slate-950">{t.whyThisStrategy}</div>
-                  <p className="mt-1">{decisionText?.whyThisStrategy}</p>
+                  <p className="mt-1">{t.intentPanelExplanations[strategyDecision.positionIntent]}</p>
+                  <p className="mt-2">{decisionText?.whyThisStrategy}</p>
                   <p className="mt-3">
                     <span className="font-semibold text-slate-950">{t.suggestedAction}</span>{" "}
                     {t.intentSuggestedActionLabels[strategyDecision.intentAction]}
