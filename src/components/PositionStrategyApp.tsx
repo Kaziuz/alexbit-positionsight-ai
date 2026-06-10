@@ -596,20 +596,6 @@ export function PositionStrategyApp() {
                 ? t.notEnoughHistory
                 : formatCompact(analysisContext.technicals.averageVolume ?? analysisContext.quote.volume24h),
           },
-          {
-            label: t.support,
-            value:
-              historyResponse?.indicators.support === null
-                ? t.notEnoughHistory
-                : formatCurrency(analysisContext.technicals.support, pricePrecision),
-          },
-          {
-            label: t.resistance,
-            value:
-              historyResponse?.indicators.resistance === null
-                ? t.notEnoughHistory
-                : formatCurrency(analysisContext.technicals.resistance, pricePrecision),
-          },
         ]
       : [];
   const entryPriceLabel = t.intentEntryPriceLabels[position.positionIntent];
@@ -680,7 +666,7 @@ export function PositionStrategyApp() {
           </div>
         </div>
         {headerMarketMetrics.length ? (
-          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-7">
             {headerMarketMetrics.map((metric) => (
               <div key={metric.label} className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{metric.label}</div>
@@ -1021,6 +1007,9 @@ export function PositionStrategyApp() {
                       quote={quote}
                       strategy={strategy}
                       language={language}
+                      support={analysisContext?.technicals.support}
+                      resistance={analysisContext?.technicals.resistance}
+                      historySource={historyResponse?.source ?? analysisContext?.technicals.historySource}
                     />
                   ) : null}
                 </div>

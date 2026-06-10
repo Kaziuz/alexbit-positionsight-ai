@@ -92,6 +92,10 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByText("Modo de tamaño", { exact: true })).toBeVisible();
   await expect(page.getByText("Backtest simple", { exact: true })).toBeVisible();
   await expect(page.getByText("Fuente del backtest", { exact: true })).toBeVisible();
+  await expect(page.locator("header").getByText("Soporte", { exact: true })).toHaveCount(0);
+  await expect(page.locator("header").getByText("Resistencia", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Soporte estimado|Soporte/).first()).toBeVisible();
+  await expect(page.getByText(/Resistencia estimada|Resistencia/).first()).toBeVisible();
   await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
@@ -240,8 +244,11 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.getByText("RSI 14", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("ATR 14", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Avg Volume", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Support", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Resistance", { exact: true }).first()).toBeVisible();
+  await expect(page.locator("header").getByText("Support", { exact: true })).toHaveCount(0);
+  await expect(page.locator("header").getByText("Resistance", { exact: true })).toHaveCount(0);
+  const chartSection = page.locator("section").filter({ hasText: "Entry vs current price" }).first();
+  await expect(chartSection.getByText(/Estimated Support|Support/).first()).toBeVisible();
+  await expect(chartSection.getByText(/Estimated Resistance|Resistance/).first()).toBeVisible();
   await expect(page.getByText("Current", { exact: true }).first()).toBeVisible();
   await expect(page.locator("pre")).toContainText('"strategyTimeframe": "1w"');
   await expect(page.locator("pre")).toContainText('"historySource"');
@@ -249,6 +256,8 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.locator("pre")).toContainText('"chartSeriesType"');
   await expect(page.locator("pre")).toContainText('"indicators"');
   await expect(page.locator("pre")).toContainText('"ma20"');
+  await expect(page.locator("pre")).toContainText('"support"');
+  await expect(page.locator("pre")).toContainText('"resistance"');
   await expect(page.locator("body")).toContainText(/Historical candles from CoinMarketCap|Estimated candles|estimated/i);
   await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
   const dataNoteSentence =

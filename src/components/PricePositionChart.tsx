@@ -16,13 +16,16 @@ import type { TooltipContentProps } from "recharts/types/component/Tooltip";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 import { formatCurrency, formatPercentage } from "@/lib/format";
 import { translations, type Language } from "@/lib/i18n";
-import type { MarketQuote, PositionInput, StrategySpec, StrategyTimeframe } from "@/types/strategy";
+import type { HistorySource, MarketQuote, PositionInput, StrategySpec, StrategyTimeframe } from "@/types/strategy";
 
 type PricePositionChartProps = {
   position: PositionInput;
   quote: MarketQuote;
   strategy: StrategySpec;
   language: Language;
+  support?: number | null;
+  resistance?: number | null;
+  historySource?: HistorySource;
 };
 
 type ChartPointType = "historical_ohlcv" | "historical_estimate" | "live_quote" | "strategy_projection";
@@ -43,6 +46,11 @@ type ChartLabels = {
   entry: string;
   current: string;
   takeProfit: string;
+  support: string;
+  resistance: string;
+  estimatedSupport: string;
+  estimatedResistance: string;
+  supportResistanceOutOfRange: string;
   price: string;
   asset: string;
   timeframe: string;
@@ -97,6 +105,15 @@ type StrategyLevel = {
   markerX: number;
   source: string;
   meaning: string;
+};
+
+type ContextReferenceLevel = {
+  key: "support" | "resistance";
+  label: string;
+  value: number;
+  color: string;
+  className: string;
+  isVisible: boolean;
 };
 
 const fallbackTimeZone = "UTC";
@@ -288,7 +305,15 @@ function formatLocalTimeLabel(
   }).format(date);
 }
 
-export function PricePositionChart({ position, quote, strategy, language }: PricePositionChartProps) {
+export function PricePositionChart({
+  position,
+  quote,
+  strategy,
+  language,
+  support,
+  resistance,
+  historySource,
+}: PricePositionChartProps) {
   const [localTimeZone, setLocalTimeZone] = useState(fallbackTimeZone);
   const t = translations[language];
   const chartLabels = t.chartLabels;
@@ -306,12 +331,53 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
   );
   const data = getProjectionData(position, quote, strategy, chartLabels, baseDate);
   const xTicks = timeframeTicks.map((tick) => tick.x);
-  const priceValues = [
+  const strategyPriceValues = [
     ...data.map((item) => item.price),
     strategy.stopLoss,
     position.entryPrice,
     quote.price,
     strategy.takeProfit,
+  ];
+  const strategyMinPrice = Math.min(...strategyPriceValues);
+  const strategyMaxPrice = Math.max(...strategyPriceValues);
+  const strategyRange = Math.max(strategyMaxPrice - strategyMinPrice, quote.price * 0.015);
+  const contextLowerBound = strategyMinPrice - strategyRange * 0.55;
+  const contextUpperBound = strategyMaxPrice + strategyRange * 0.55;
+  const isUsableContextLevel = (value: number | null | undefined): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0;
+  const isContextLevelVisible = (value: number) => value >= contextLowerBound && value <= contextUpperBound;
+  const supportVisible = isUsableContextLevel(support) && isContextLevelVisible(support);
+  const resistanceVisible = isUsableContextLevel(resistance) && isContextLevelVisible(resistance);
+  const isEstimatedContext = historySource !== "coinmarketcap";
+  const contextLevels: ContextReferenceLevel[] = [
+    ...(isUsableContextLevel(support)
+      ? [
+          {
+            key: "support" as const,
+            label: isEstimatedContext ? chartLabels.estimatedSupport : chartLabels.support,
+            value: support,
+            color: "#7c3aed",
+            className: "border-violet-200 bg-violet-50 text-violet-700",
+            isVisible: supportVisible,
+          },
+        ]
+      : []),
+    ...(isUsableContextLevel(resistance)
+      ? [
+          {
+            key: "resistance" as const,
+            label: isEstimatedContext ? chartLabels.estimatedResistance : chartLabels.resistance,
+            value: resistance,
+            color: "#0891b2",
+            className: "border-cyan-200 bg-cyan-50 text-cyan-700",
+            isVisible: resistanceVisible,
+          },
+        ]
+      : []),
+  ];
+  const priceValues = [
+    ...strategyPriceValues,
+    ...contextLevels.filter((level) => level.isVisible).map((level) => level.value),
   ];
   const minPrice = Math.min(...priceValues);
   const maxPrice = Math.max(...priceValues);
@@ -446,7 +512,7 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
     <div className="w-full min-w-0">
       <div className="h-[340px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 16, right: 18, bottom: 18, left: 6 }}>
+          <LineChart data={data} margin={{ top: 16, right: 78, bottom: 18, left: 6 }}>
             <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
             <XAxis
               dataKey="x"
@@ -481,6 +547,26 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
                 opacity={0.82}
               />
             ))}
+            {contextLevels
+              .filter((level) => level.isVisible)
+              .map((level) => (
+                <ReferenceLine
+                  key={level.key}
+                  y={level.value}
+                  stroke={level.color}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 3 1 3"
+                  ifOverflow="hidden"
+                  opacity={0.78}
+                  label={{
+                    value: level.label,
+                    position: "right",
+                    fill: level.color,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                />
+              ))}
             {markerPoints.map((point) => {
               const markerLevel = getMarkerLevel(point.markerRole);
 
@@ -531,14 +617,23 @@ export function PricePositionChart({ position, quote, strategy, language }: Pric
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
         {levels.map((level) => (
           <div key={level.label} className={`rounded-md border px-3 py-2 ${level.className}`}>
             <div className="text-[11px] font-semibold uppercase tracking-wide">{level.label}</div>
             <div className="mt-0.5 text-sm font-semibold">{formatCurrency(level.value, pricePrecision)}</div>
           </div>
         ))}
+        {contextLevels.map((level) => (
+          <div key={level.key} className={`rounded-md border px-3 py-2 ${level.className}`}>
+            <div className="text-[11px] font-semibold uppercase tracking-wide">{level.label}</div>
+            <div className="mt-0.5 text-sm font-semibold">{formatCurrency(level.value, pricePrecision)}</div>
+          </div>
+        ))}
       </div>
+      {contextLevels.some((level) => !level.isVisible) ? (
+        <p className="mt-2 text-xs leading-5 text-slate-500">{chartLabels.supportResistanceOutOfRange}</p>
+      ) : null}
       <p className="mt-3 text-xs leading-5 text-slate-500">
         {quote.source === "coinmarketcap" ? t.chartDataNotes.live : t.chartDataNotes.mock}
       </p>
