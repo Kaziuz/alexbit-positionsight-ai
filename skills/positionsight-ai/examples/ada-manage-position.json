@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "1.0.0",
+  "skill": {
+    "name": "positionsight-ai",
+    "track": "strategy_skills",
+    "artifactType": "backtestable_strategy_spec"
+  },
+  "inputSchema": {
+    "required": [
+      "symbol",
+      "entryPrice",
+      "positionSize",
+      "totalCapital",
+      "strategyTimeframe",
+      "timeframeCategory",
+      "analysisInterval",
+      "maxRiskPercentage",
+      "positionIntent",
+      "strategyMode"
+    ],
+    "properties": {}
+  },
+  "dataProvenance": {
+    "source": "coinmarketcap",
+    "latestQuoteSource": "coinmarketcap",
+    "historySource": "estimated",
+    "isLive": true,
+    "intendedLiveSource": "CoinMarketCap",
+    "generatedAt": "2026-06-11T12:05:00.000Z"
+  },
+  "positionIntent": "manage_open_position",
+  "intentAction": "hold_with_trailing_exit",
+  "intentVerdict": "hold",
+  "riskBadge": "low",
+  "riskVerdict": "good",
+  "strategyTimeframe": "1d",
+  "timeframeCategory": "daily",
+  "analysisInterval": "1d",
+  "stopStatus": "above_stop",
+  "shouldAddExposure": false,
+  "shouldReduceExposure": false,
+  "shouldExitPosition": false,
+  "allowShort": false,
+  "selectedStrategyMode": "auto",
+  "evaluatedStrategyType": "trend_following_pullback",
+  "finalRiskVerdict": "good",
+  "noTradeRecommended": false,
+  "strategySpec": {
+    "asset": "ADA",
+    "strategyTimeframe": "1d",
+    "timeframeCategory": "daily",
+    "analysisInterval": "1d",
+    "strategyType": "trend_following_pullback",
+    "entryCondition": "Manage the existing position by reviewing hold, reduce, wait, or trailing-exit conditions against the selected timeframe.",
+    "exitCondition": "Hold only while support, risk, and trailing-exit conditions remain constructive; reduce if stop, support, or market context weakens.",
+    "stopLoss": 0.49,
+    "takeProfit": 0.574,
+    "invalidationLevel": 0.488,
+    "riskRules": {
+      "positionIntent": "manage_open_position",
+      "allowShort": false,
+      "maxRiskPercentage": 1,
+      "positionSize": 500,
+      "totalCapital": 1000,
+      "calculatedPositionSize": 500,
+      "positionSizingMethod": "atr_volatility",
+      "stopDistance": 0.03,
+      "atrMultiple": 1.75,
+      "estimatedRiskAmount": 15,
+      "intentAction": "hold_with_trailing_exit",
+      "intentVerdict": "hold",
+      "riskBadge": "low",
+      "stopStatus": "above_stop",
+      "shouldAddExposure": false,
+      "shouldReduceExposure": false,
+      "shouldExitPosition": false,
+      "sizingMode": "existing_position",
+      "chartMode": "position_management"
+    },
+    "dataUsed": {
+      "entryPrice": 0.52,
+      "currentPrice": 0.602,
+      "percentChange24h": 1.8,
+      "volume24h": 420000000,
+      "marketCap": 21300000000,
+      "source": "coinmarketcap",
+      "lastUpdated": "2026-06-11T12:05:00.000Z"
+    }
+  },
+  "strategyDecision": {
+    "positionIntent": "manage_open_position",
+    "intentAction": "hold_with_trailing_exit",
+    "intentVerdict": "hold",
+    "riskBadge": "low",
+    "stopStatus": "above_stop",
+    "shouldAddExposure": false,
+    "shouldReduceExposure": false,
+    "shouldExitPosition": false,
+    "allowShort": false,
+    "sizingMode": "existing_position",
+    "chartMode": "position_management",
+    "suggestedAction": "Hold with trailing exit while trend, support, and risk remain constructive.",
+    "decisionCondition": "Manage an existing long position with hold, reduce, wait, or trailing-exit conditions.",
+    "selectedMode": "auto",
+    "selectedStrategyMode": "auto",
+    "evaluatedStrategyType": "trend_following_pullback",
+    "finalRiskVerdict": "good",
+    "noTradeRecommended": false,
+    "selectedBy": "auto",
+    "fit": "good",
+    "whyThisStrategy": "The selected trend confirmation mode matches the current market context.",
+    "warnings": [],
+    "nextConfirmation": "Review support, stop distance, and trailing-exit behavior before increasing or reducing exposure.",
+    "beginnerExplanation": "Open-position management uses your existing holdings. It does not calculate a fresh buy or add exposure automatically."
+  },
+  "marketContext": {
+    "symbol": "ADA",
+    "source": "coinmarketcap",
+    "quote": {
+      "price": 0.602,
+      "percentChange24h": 1.8,
+      "volume24h": 420000000,
+      "marketCap": 21300000000,
+      "lastUpdated": "2026-06-11T12:05:00.000Z"
+    },
+    "technicals": {
+      "ema20": 0.596,
+      "ema50": 0.581,
+      "ema200": 0.55,
+      "rsi14": 58,
+      "atr14": 0.017,
+      "averageVolume": 390000000,
+      "support": 0.57,
+      "resistance": 0.64,
+      "historySource": "estimated",
+      "historyCandlesUsed": 60,
+      "trendState": "bullish",
+      "closePosition": "above_support"
+    },
+    "sentiment": {
+      "score": 10,
+      "label": "neutral",
+      "newsBias": "Neutral educational demo context.",
+      "communityBias": "Moderate attention."
+    },
+    "orderBook": {
+      "bidAskSpreadPercent": 0.08,
+      "buyPressure": 54,
+      "sellPressure": 46,
+      "liquidityScore": 76
+    },
+    "derivatives": {
+      "fundingBias": "neutral",
+      "openInterestChange24h": 1.2,
+      "longShortBias": "neutral"
+    }
+  },
+  "history": {
+    "source": "estimated",
+    "candlesUsed": 60,
+    "indicatorSource": "estimated_candles",
+    "indicators": {
+      "ma20": 0.596,
+      "ma50": 0.581,
+      "ma200": 0.55,
+      "rsi14": 58,
+      "atr14": 0.017,
+      "averageVolume": 390000000,
+      "support": 0.57,
+      "resistance": 0.64
+    },
+    "warnings": ["Historical OHLCV is unavailable with the current CoinMarketCap plan; chart path and indicators are estimated."]
+  },
+  "backtestSpec": {
+    "positionIntent": "manage_open_position",
+    "intentAction": "hold_with_trailing_exit",
+    "riskBadge": "low",
+    "stopStatus": "above_stop",
+    "allowShort": false,
+    "strategyType": "trend_following_pullback",
+    "strategyTimeframe": "1d",
+    "timeframeCategory": "daily",
+    "analysisInterval": "1d",
+    "signal": "HOLD",
+    "shouldOpenPosition": false,
+    "entryRule": {
+      "type": "none",
+      "reason": "Manage existing exposure with hold, reduce, or trailing-exit review; do not open a new position."
+    },
+    "exitRule": {
+      "type": "target_or_trailing_exit",
+      "trailingExit": "trail remaining position while price holds above trend filter"
+    },
+    "stopRule": {
+      "type": "atr_volatility_stop",
+      "stopLoss": 0.49,
+      "trigger": "close_at_or_below_stop_loss"
+    },
+    "takeProfitRule": {
+      "type": "compatibility_trailing_reference",
+      "takeProfit": 0.574
+    },
+    "invalidationRule": {
+      "type": "price_level",
+      "invalidationLevel": 0.488
+    },
+    "positionSizing": {
+      "type": "risk_based",
+      "sizingMode": "existing_position",
+      "positionSize": 500
+    },
+    "riskManagement": {
+      "noLiveExecution": true,
+      "allowShort": false,
+      "positionIntent": "manage_open_position"
+    }
+  },
+  "trailingExit": {
+    "enabled": true,
+    "method": "atr_ma_trailing",
+    "initialReference": 0.574,
+    "atrMultiple": 1.75
+  },
+  "executionAssumptions": {
+    "initialCapital": 10000,
+    "feesBps": 10,
+    "slippageBps": 5,
+    "allowShort": false,
+    "allowLeverage": false,
+    "orderType": "market_on_next_close"
+  },
+  "validation": {
+    "backtestReady": true,
+    "limitations": ["estimated historical candles", "not financial advice", "no live execution"]
+  },
+  "aiExplanation": {
+    "enabled": false,
+    "source": "not_generated",
+    "provider": null,
+    "model": null,
+    "explanation": null,
+    "guardrails": {
+      "doesNotOverrideEngine": true,
+      "noFinancialAdvice": true,
+      "noTradeExecution": true
+    }
+  },
+  "warnings": ["Historical OHLCV is unavailable with the current CoinMarketCap plan; chart path and indicators are estimated."]
+}

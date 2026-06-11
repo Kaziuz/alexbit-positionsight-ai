@@ -16,6 +16,12 @@ It ships a structured strategy skill and export artifact, not a live on-chain tr
 
 Because this project does not execute trades and does not deploy or control an on-chain trading agent, the agent address can be submitted as `N/A` for this project type.
 
+## CMC Strategy Skill Package
+
+The reusable CMC Strategy Skill artifact lives in `skills/positionsight-ai/`.
+
+It includes `SKILL.md`, `skill.json`, concise example strategy exports, and `BACKTEST.md` documentation for using the exported JSON as a Track 2 backtestable strategy specification. The package is intentionally non-executing: no wallet connection, no exchange execution, no autonomous trading, and no financial advice.
+
 ## What It Does
 
 - Analyzes a selected eligible crypto asset.
