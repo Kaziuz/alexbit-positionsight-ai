@@ -38,6 +38,15 @@ async function getExportJson(page: Page) {
     executionAssumptions?: { allowShort?: boolean };
     evaluationMetrics?: unknown;
     validation?: { limitations?: string[] };
+    aiExplanation?: {
+      source?: string;
+      guardrails?: {
+        doesNotOverrideEngine?: boolean;
+        noFinancialAdvice?: boolean;
+        noTradeExecution?: boolean;
+      };
+    };
+    scannerResults?: unknown[];
     positionIntent?: string;
     intentAction?: string;
     riskBadge?: string;
@@ -67,7 +76,7 @@ async function getExportJson(page: Page) {
 async function selectAda(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Advanced", exact: true }).click();
-  await page.locator("select").selectOption("ADA");
+  await page.locator("form select").selectOption("ADA");
   await expect(page.locator("pre")).toContainText('"asset": "ADA"');
 }
 
@@ -83,7 +92,7 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByRole("button", { name: "English" })).toBeVisible();
   await page.getByRole("button", { name: "Español" }).click();
 
-  await expect(page.getByText("Temporalidad de estrategia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Temporalidad de estrategia", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Analizar entrada", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Gestionar posición abierta", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Revisar salida / venta", exact: true })).toBeVisible();
@@ -118,6 +127,46 @@ test("strategy explanation can be opened", async ({ page }) => {
   await page.getByRole("button", { name: "What is this?" }).first().click();
 
   await expect(page.getByText("Looks for a setup where the market is showing enough strength")).toBeVisible();
+});
+
+test("explanation endpoint and panel use deterministic fallback without provider", async ({ page }) => {
+  await page.goto("/");
+  const payload = await getExportJson(page);
+  const response = await page.request.post("/api/explain", {
+    data: {
+      artifact: payload,
+      language: "en",
+    },
+  });
+
+  expect(response.status()).toBe(200);
+
+  const explanationPayload = (await response.json()) as {
+    source?: string;
+    model?: string | null;
+    explanation?: {
+      summary?: string;
+      whatTheSystemSaw?: string[];
+      whyThisDecision?: string[];
+      riskExplanation?: string;
+      whatToWatchNext?: string[];
+      limitations?: string[];
+      notFinancialAdvice?: string;
+    };
+  };
+
+  expect(explanationPayload.source).toBe("deterministic_fallback");
+  expect(explanationPayload.model).toBeNull();
+  expect(explanationPayload.explanation?.summary).toContain("deterministic engine");
+  expect(Array.isArray(explanationPayload.explanation?.whatTheSystemSaw)).toBe(true);
+
+  await page.getByRole("button", { name: "Generate explanation", exact: true }).click();
+  await expect(page.getByText("Local deterministic explanation", { exact: true })).toBeVisible();
+  await expect(page.getByText("What the system saw", { exact: true })).toBeVisible();
+  await expect(page.getByText("Why this decision", { exact: true })).toBeVisible();
+  await expect(page.getByText("Risk explanation", { exact: true })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(/AI_API_KEY|your_provider_api_key_here/i);
+  await expect(page.locator("body")).not.toContainText(/OpenAI|ChatGPT/i);
 });
 
 test("market API returns a safe data source", async ({ request }) => {
@@ -296,6 +345,7 @@ test("day 7 and day 8 targeted ADA QA scenarios", async ({ page }) => {
     "executionAssumptions",
     "evaluationMetrics",
     "validation",
+    "aiExplanation",
   ] as const) {
     expect(payload[key]).toBeTruthy();
   }
@@ -307,6 +357,10 @@ test("day 7 and day 8 targeted ADA QA scenarios", async ({ page }) => {
   expect(payload.analysisInterval).toBe("1d");
   expect(payload.allowShort).toBe(false);
   expect(payload.executionAssumptions?.allowShort).toBe(false);
+  expect(payload.aiExplanation?.source).toBe("not_generated");
+  expect(payload.aiExplanation?.guardrails?.doesNotOverrideEngine).toBe(true);
+  expect(payload.aiExplanation?.guardrails?.noFinancialAdvice).toBe(true);
+  expect(payload.aiExplanation?.guardrails?.noTradeExecution).toBe(true);
   expect(payload.backtestSpec?.allowShort).toBe(false);
   expect(["low", "medium", "high", "no_trade"]).toContain(payload.riskBadge);
   expect(["historical_cmc", "estimated_from_live_quote", "demo_dataset"]).toContain(payload.backtestResult?.backtestSource);
@@ -381,4 +435,31 @@ test("day 7 and day 8 targeted ADA QA scenarios", async ({ page }) => {
   await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
   await expect(page.getByText("Backtest simple", { exact: true })).toBeVisible();
   await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
+});
+
+test("token scanner runs deterministic scan and can load a result", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByText("Token Scanner", { exact: true })).toBeVisible();
+  await expect(page.getByText("Possible movement to review", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Scan tokens", exact: true }).click();
+  await expect(page.getByText("Possible movement to review", { exact: true }).first()).toBeVisible();
+
+  const scannerCards = page.getByText("Possible movement to review", { exact: true });
+  await expect.poll(async () => scannerCards.count()).toBeGreaterThanOrEqual(3);
+  await expect(page.getByText("Risk badge", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Intent action", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Historical CMC|Estimated candles|History unavailable/).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Load in main analysis", exact: true }).first().click();
+  await expect(page.locator("pre")).toContainText('"asset": "ETH"');
+
+  const payload = await getExportJson(page);
+  expect(payload.strategyTimeframe).toBe("1d");
+  expect(payload.strategyDecision?.positionIntent).toBe("analyze_entry");
+  expect(Array.isArray(payload.scannerResults)).toBe(true);
+  expect((payload.scannerResults ?? []).length).toBeGreaterThanOrEqual(3);
+  await expect(page.locator("body")).not.toContainText(/AI_API_KEY|your_provider_api_key_here/i);
+  await expect(page.locator("body")).not.toContainText(/OpenAI|ChatGPT/i);
 });

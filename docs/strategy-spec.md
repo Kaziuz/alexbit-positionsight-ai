@@ -194,11 +194,73 @@ Top-level fields:
 * `executionAssumptions`: Starting capital, fees, slippage, order type, and no-short/no-leverage constraints.
 * `evaluationMetrics`: Metrics a backtest runner should calculate.
 * `validation`: Backtest readiness and limitations.
+* `aiExplanation`: Optional explanation metadata and guardrails.
+* `scannerResults`: Optional deterministic token-scan results when a scan has run.
 * `strategySpec`: Human-readable strategy specification.
 * `strategyDecision`: User/auto selection metadata and warnings.
 * `marketContext`: CMC-ready context used to produce the strategy.
 * `explanation`: Human-readable explanation.
 * `warnings`: Human-readable warnings.
+
+### AI Explanation Guardrails
+
+`aiExplanation` records an optional explanation layer. It is not a decision layer.
+
+Shape:
+
+```json
+{
+  "enabled": true,
+  "source": "provider",
+  "provider": "openai-compatible",
+  "model": "configured-model-name",
+  "explanation": {
+    "summary": "string",
+    "whatTheSystemSaw": ["string"],
+    "whyThisDecision": ["string"],
+    "riskExplanation": "string",
+    "whatToWatchNext": ["string"],
+    "limitations": ["string"],
+    "notFinancialAdvice": "string"
+  },
+  "guardrails": {
+    "doesNotOverrideEngine": true,
+    "noFinancialAdvice": true,
+    "noTradeExecution": true
+  }
+}
+```
+
+Allowed sources:
+
+* `provider`: A configured server-side OpenAI-compatible chat-completion provider returned a valid explanation.
+* `deterministic_fallback`: Provider use was disabled, unconfigured, unavailable, timed out, invalid, or rejected by validation.
+* `not_generated`: The user has not clicked Generate explanation yet.
+
+Rules:
+
+* The explanation must preserve the deterministic `riskBadge`, `finalRiskVerdict`, `intentAction`, `stopStatus`, and `selectedStrategyMode`.
+* The explanation must not create new prices, signals, entries, exits, risk levels, or trade decisions.
+* The explanation must not provide financial advice.
+* API keys stay server-side only and are never included in the artifact.
+
+The provider integration is intentionally provider-agnostic. It targets a generic OpenAI-compatible `/chat/completions` endpoint so compatible providers or local gateways can be swapped with environment variables. If provider validation fails, the local deterministic explanation is used.
+
+### Token Scanner
+
+`scannerResults` is optional and appears only after the Token Scanner has run. The scanner evaluates multiple eligible tokens with the same deterministic strategy engine used by the main analysis.
+
+Scanner behavior:
+
+* Fetch `/api/market` for each selected eligible token.
+* Fetch `/api/history` for the selected strategy timeframe.
+* Merge historical indicators into `MarketContext` the same way the main analysis does.
+* Run the deterministic strategy engine.
+* Run the simple deterministic backtest.
+* Limit client-side scan concurrency to reduce rate-limit pressure.
+* Label data source as live quote, historical candles, estimated candles, or demo fallback.
+
+Scanner ranking and result cards are deterministic. AI is not used to rank, select, or modify scanner decisions. Scanner language should describe results as possible movements to review, not buy/sell signals or investment recommendations.
 
 ### Data Requirements
 

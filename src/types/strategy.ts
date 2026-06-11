@@ -312,6 +312,53 @@ export type BacktestResult = {
   limitations: string[];
 };
 
+export type AiExplanationResult = {
+  summary: string;
+  whatTheSystemSaw: string[];
+  whyThisDecision: string[];
+  riskExplanation: string;
+  whatToWatchNext: string[];
+  limitations: string[];
+  notFinancialAdvice: string;
+};
+
+export type AiExplanationSource = "provider" | "deterministic_fallback" | "not_generated";
+
+export type AiExplanationMetadata = {
+  enabled: boolean;
+  source: AiExplanationSource;
+  provider: string | null;
+  model: string | null;
+  explanation: AiExplanationResult | null;
+  guardrails: {
+    doesNotOverrideEngine: true;
+    noFinancialAdvice: true;
+    noTradeExecution: true;
+  };
+};
+
+export type ScannerResult = {
+  symbol: string;
+  name: string;
+  price: number;
+  percentChange24h: number;
+  trendState: MarketContext["technicals"]["trendState"];
+  rsi14: number | null;
+  maAlignment: "bullish" | "mixed" | "bearish" | "unavailable";
+  riskBadge: RiskBadge;
+  intentAction: IntentAction;
+  stopStatus: StopStatus;
+  dataSource: {
+    quote: MarketContext["source"];
+    history: HistorySource | "unavailable";
+    backtest: BacktestSource;
+  };
+  reason: string;
+  strategyDecision: Omit<StrategyDecision, "spec">;
+  strategySpec: StrategySpec;
+  backtestResult: BacktestResult;
+};
+
 export type StrategyExport = {
   schemaVersion: "1.0.0";
   skill: {
@@ -398,6 +445,8 @@ export type StrategyExport = {
     backtestReady: true;
     limitations: string[];
   };
+  aiExplanation?: AiExplanationMetadata;
+  scannerResults?: ScannerResult[];
   strategySpec: StrategySpec;
   strategyDecision: Omit<StrategyDecision, "spec">;
   marketContext: MarketContext;

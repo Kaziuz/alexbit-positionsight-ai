@@ -20,6 +20,10 @@ import { createStrategyExport } from "@/lib/strategy-export";
 import { generateStrategyDecision } from "@/lib/strategy-engine";
 import { getTimeframeCategory, strategyTimeframes } from "@/lib/strategy-timeframe";
 import type {
+  AiExplanationMetadata,
+  AiExplanationResult,
+  AiExplanationSource,
+  EligibleToken,
   MarketContext,
   MarketQuote,
   HistoryResponse,
@@ -27,6 +31,7 @@ import type {
   PositionInput,
   RiskBadge,
   RiskVerdict,
+  ScannerResult,
   StrategyDecision,
   StrategyMode,
   StrategyTimeframe,
@@ -43,6 +48,7 @@ const atrStopMultiple = 1.75;
 
 const strategyModes: StrategyMode[] = ["auto", "trend_confirmation", "breakout_retest", "defensive_rebound", "risk_check"];
 const positionIntents: PositionIntent[] = ["analyze_entry", "manage_open_position", "exit_review"];
+const scannerMaxOptions = [5, 10, 20] as const;
 
 const initialPosition: PositionInput = {
   symbol: "AVAX",
@@ -110,6 +116,14 @@ function getRiskBadgeTone(badge: RiskBadge) {
 }
 
 type TranslationSet = (typeof translations)[Language];
+type ScannerUniverse = "beginner" | "advanced" | "all";
+type ExplainApiResponse = {
+  source: Exclude<AiExplanationSource, "not_generated">;
+  provider: string;
+  model: string | null;
+  explanation: AiExplanationResult;
+  warnings: string[];
+};
 
 function translateMessage(message: string | undefined, t: TranslationSet) {
   if (!message) {
@@ -142,6 +156,70 @@ function getLocalizedDecisionText(decision: StrategyDecision, t: TranslationSet)
       intentCopy.beginnerExplanation ||
       t.beginnerVerdictMessages[decision.finalRiskVerdict],
   };
+}
+
+function mergeHistoryIntoMarketContext(marketContext: MarketContext, historyResponse: HistoryResponse | null) {
+  if (!historyResponse) {
+    return marketContext;
+  }
+
+  const indicators = historyResponse.indicators;
+
+  return {
+    ...marketContext,
+    technicals: {
+      ...marketContext.technicals,
+      ema20: indicators.ema20 ?? marketContext.technicals.ema20,
+      ema50: indicators.ema50 ?? marketContext.technicals.ema50,
+      ema200: indicators.ema200 ?? marketContext.technicals.ema200,
+      rsi14: indicators.rsi14 ?? marketContext.technicals.rsi14,
+      atr14: indicators.atr14 ?? marketContext.technicals.atr14,
+      averageVolume: indicators.averageVolume ?? marketContext.technicals.averageVolume,
+      support: indicators.support ?? marketContext.technicals.support,
+      resistance: indicators.resistance ?? marketContext.technicals.resistance,
+      historySource: historyResponse.source,
+      historyCandlesUsed: historyResponse.candles.length,
+      indicatorWarnings: historyResponse.warnings,
+    },
+  } satisfies MarketContext;
+}
+
+function getMaAlignment(context: MarketContext): ScannerResult["maAlignment"] {
+  const { ema20, ema50, ema200 } = context.technicals;
+
+  if (![ema20, ema50, ema200].every((value) => Number.isFinite(value))) {
+    return "unavailable";
+  }
+
+  if (ema20 >= ema50 && ema50 >= ema200) {
+    return "bullish";
+  }
+
+  if (ema20 <= ema50 && ema50 <= ema200) {
+    return "bearish";
+  }
+
+  return "mixed";
+}
+
+function calculateScannerPositionSize(context: MarketContext, totalCapital: number, riskPercentage: number) {
+  const entryPrice = context.quote.price;
+  const riskAmount = totalCapital * (riskPercentage / 100);
+  const atr = context.technicals.atr14;
+  const stopDistance =
+    typeof atr === "number" && Number.isFinite(atr) && atr > 0
+      ? atr * atrStopMultiple
+      : entryPrice * (riskPercentage / 100);
+
+  return roundCalculatedSize(stopDistance > 0 ? riskAmount / stopDistance : 0);
+}
+
+function omitStrategySpec(decision: StrategyDecision): Omit<StrategyDecision, "spec"> {
+  const decisionForExport: Partial<StrategyDecision> = { ...decision };
+
+  delete decisionForExport.spec;
+
+  return decisionForExport as Omit<StrategyDecision, "spec">;
 }
 
 function roundCalculatedSize(value: number) {
@@ -215,6 +293,16 @@ export function PositionStrategyApp() {
   const [isLoadingContext, setIsLoadingContext] = useState(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
+  const [aiExplanationResponse, setAiExplanationResponse] = useState<ExplainApiResponse | null>(null);
+  const [isExplanationLoading, setIsExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const [scannerUniverse, setScannerUniverse] = useState<ScannerUniverse>("beginner");
+  const [scannerIntent, setScannerIntent] = useState<PositionIntent>("analyze_entry");
+  const [scannerTimeframe, setScannerTimeframe] = useState<StrategyTimeframe>("1d");
+  const [scannerMaxTokens, setScannerMaxTokens] = useState<(typeof scannerMaxOptions)[number]>(10);
+  const [scannerResults, setScannerResults] = useState<ScannerResult[]>([]);
+  const [isScannerLoading, setIsScannerLoading] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
   const t = translations[language];
 
   const availableTokens = tokenMode === "beginner" ? beginnerTokenSet : eligibleTokenUniverse;
@@ -225,29 +313,7 @@ export function PositionStrategyApp() {
       return null;
     }
 
-    if (!historyResponse) {
-      return marketContext;
-    }
-
-    const indicators = historyResponse.indicators;
-
-    return {
-      ...marketContext,
-      technicals: {
-        ...marketContext.technicals,
-        ema20: indicators.ema20 ?? marketContext.technicals.ema20,
-        ema50: indicators.ema50 ?? marketContext.technicals.ema50,
-        ema200: indicators.ema200 ?? marketContext.technicals.ema200,
-        rsi14: indicators.rsi14 ?? marketContext.technicals.rsi14,
-        atr14: indicators.atr14 ?? marketContext.technicals.atr14,
-        averageVolume: indicators.averageVolume ?? marketContext.technicals.averageVolume,
-        support: indicators.support ?? marketContext.technicals.support,
-        resistance: indicators.resistance ?? marketContext.technicals.resistance,
-        historySource: historyResponse.source,
-        historyCandlesUsed: historyResponse.candles.length,
-        indicatorWarnings: historyResponse.warnings,
-      },
-    };
+    return mergeHistoryIntoMarketContext(marketContext, historyResponse);
   }, [historyResponse, marketContext]);
   const quote = analysisContext ? getQuoteFromContext(analysisContext) : null;
   const parsedEntryPrice = useMemo(() => parseLocalizedNumberInput(entryPriceInput), [entryPriceInput]);
@@ -510,6 +576,20 @@ export function PositionStrategyApp() {
     };
   }, [position.strategyTimeframe, position.symbol]);
 
+  useEffect(() => {
+    setAiExplanationResponse(null);
+    setExplanationError(null);
+  }, [
+    position.symbol,
+    position.positionIntent,
+    position.strategyMode,
+    position.strategyTimeframe,
+    position.maxRiskPercentage,
+    entryPriceInput,
+    totalCapitalInput,
+    existingPositionSizeInput,
+  ]);
+
   const strategyDecision = useMemo(() => {
     if (!analysisContext || !normalizedPosition || !isPositionValid) {
       return null;
@@ -531,6 +611,31 @@ export function PositionStrategyApp() {
           history: historyResponse,
         })
       : null;
+  const aiExplanationMetadata: AiExplanationMetadata = aiExplanationResponse
+    ? {
+        enabled: true,
+        source: aiExplanationResponse.source,
+        provider: aiExplanationResponse.provider,
+        model: aiExplanationResponse.model,
+        explanation: aiExplanationResponse.explanation,
+        guardrails: {
+          doesNotOverrideEngine: true,
+          noFinancialAdvice: true,
+          noTradeExecution: true,
+        },
+      }
+    : {
+        enabled: false,
+        source: "not_generated",
+        provider: null,
+        model: null,
+        explanation: null,
+        guardrails: {
+          doesNotOverrideEngine: true,
+          noFinancialAdvice: true,
+          noTradeExecution: true,
+        },
+      };
   const pnlPercentage =
     quote && normalizedPosition && isPositionValid
       ? ((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) * 100
@@ -550,6 +655,8 @@ export function PositionStrategyApp() {
           analysisContext,
           historyResponse ?? undefined,
           backtestResult ?? undefined,
+          aiExplanationMetadata,
+          scannerResults.length ? scannerResults : undefined,
         )
       : null;
   const strategyJson = exportPayload ? JSON.stringify(exportPayload, null, 2) : "";
@@ -616,6 +723,165 @@ export function PositionStrategyApp() {
 
     if (nextMode === "beginner" && !beginnerTokenSet.some((token) => token.symbol === position.symbol)) {
       setPosition((current) => ({ ...current, symbol: "AVAX" }));
+    }
+  }
+
+  const scannerTokenCandidates = useMemo(() => {
+    if (scannerUniverse === "beginner") {
+      return beginnerTokenSet;
+    }
+
+    if (scannerUniverse === "advanced") {
+      return eligibleTokenUniverse.filter((token) => !token.beginner);
+    }
+
+    return eligibleTokenUniverse;
+  }, [scannerUniverse]);
+
+  async function generateExplanation() {
+    if (!exportPayload) {
+      return;
+    }
+
+    setIsExplanationLoading(true);
+    setExplanationError(null);
+
+    try {
+      const response = await fetch("/api/explain", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          artifact: exportPayload,
+          language,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(t.explanationUnavailable);
+      }
+
+      const payload = (await response.json()) as ExplainApiResponse;
+      setAiExplanationResponse(payload);
+    } catch {
+      setExplanationError(t.explanationUnavailable);
+    } finally {
+      setIsExplanationLoading(false);
+    }
+  }
+
+  async function scanSingleToken(token: EligibleToken): Promise<ScannerResult | null> {
+    const marketResponse = await fetch(`/api/market?symbol=${token.symbol}`, { cache: "no-store" });
+
+    if (!marketResponse.ok) {
+      return null;
+    }
+
+    const market = (await marketResponse.json()) as MarketContext;
+    const historyResponseForToken = await fetch(
+      `/api/history?symbol=${token.symbol}&timeframe=${scannerTimeframe}`,
+      { cache: "no-store" },
+    );
+    const history = historyResponseForToken.ok ? ((await historyResponseForToken.json()) as HistoryResponse) : null;
+    const context = mergeHistoryIntoMarketContext(market, history);
+    const totalCapital = parsedTotalCapital.ok && parsedTotalCapital.value > 0 ? parsedTotalCapital.value : defaultTotalCapital;
+    const positionSize =
+      scannerIntent === "analyze_entry"
+        ? calculateScannerPositionSize(context, totalCapital, position.maxRiskPercentage)
+        : parsedExistingPositionSize.ok && parsedExistingPositionSize.value > 0
+          ? parsedExistingPositionSize.value
+          : 1;
+    const scanPosition: PositionInput = {
+      symbol: token.symbol,
+      entryPrice: context.quote.price,
+      positionSize: positionSize > 0 ? positionSize : 1,
+      totalCapital,
+      strategyTimeframe: scannerTimeframe,
+      timeframeCategory: getTimeframeCategory(scannerTimeframe),
+      analysisInterval: scannerTimeframe,
+      maxRiskPercentage: position.maxRiskPercentage,
+      positionIntent: scannerIntent,
+      strategyMode: "auto",
+    };
+    const decision = generateStrategyDecision(scanPosition, context, "auto");
+    const backtest = runSimpleBacktest({
+      symbol: token.symbol,
+      position: scanPosition,
+      strategy: decision.spec,
+      currentPrice: context.quote.price,
+      strategyType: decision.spec.strategyType,
+      history,
+    });
+    const decisionForExport = omitStrategySpec(decision);
+
+    return {
+      symbol: token.symbol,
+      name: token.name,
+      price: context.quote.price,
+      percentChange24h: context.quote.percentChange24h,
+      trendState: context.technicals.trendState,
+      rsi14: context.technicals.rsi14,
+      maAlignment: getMaAlignment(context),
+      riskBadge: decision.riskBadge,
+      intentAction: decision.intentAction,
+      stopStatus: decision.stopStatus,
+      dataSource: {
+        quote: context.source,
+        history: history?.source ?? "unavailable",
+        backtest: backtest.backtestSource,
+      },
+      reason: decision.noTradeReason ?? decision.whyThisStrategy,
+      strategyDecision: decisionForExport,
+      strategySpec: decision.spec,
+      backtestResult: backtest,
+    };
+  }
+
+  async function scanTokens() {
+    const tokensToScan = scannerTokenCandidates.slice(0, scannerMaxTokens);
+
+    setIsScannerLoading(true);
+    setScannerError(null);
+    setScannerResults([]);
+
+    try {
+      const results: ScannerResult[] = [];
+
+      for (let index = 0; index < tokensToScan.length; index += 3) {
+        const batch = tokensToScan.slice(index, index + 3);
+        const batchResults = await Promise.all(batch.map((token) => scanSingleToken(token)));
+
+        results.push(...batchResults.filter((result): result is ScannerResult => result !== null));
+        setScannerResults([...results]);
+      }
+
+      if (!results.length) {
+        setScannerError(t.scannerNoResults);
+      }
+    } catch {
+      setScannerError(t.scannerFailed);
+    } finally {
+      setIsScannerLoading(false);
+    }
+  }
+
+  function loadScannerResult(result: ScannerResult) {
+    setPosition((current) => ({
+      ...current,
+      symbol: result.symbol,
+      positionIntent: scannerIntent,
+      strategyTimeframe: scannerTimeframe,
+      timeframeCategory: getTimeframeCategory(scannerTimeframe),
+      analysisInterval: scannerTimeframe,
+      maxRiskPercentage: position.maxRiskPercentage,
+      strategyMode: "auto",
+    }));
+    setEntryPriceInput(String(result.price));
+
+    if (scannerIntent !== "analyze_entry") {
+      setExistingPositionSizeInput(String(result.strategySpec.riskRules.positionSize || 1));
     }
   }
 
@@ -1061,6 +1327,156 @@ export function PositionStrategyApp() {
             </section>
           ) : null}
 
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-lg font-semibold text-ink">
+                  <Activity className="h-5 w-5 text-sky-700" />
+                  {t.tokenScanner}
+                </div>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t.scannerSubtitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={scanTokens}
+                disabled={isScannerLoading}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-sky-700 px-4 text-sm font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isScannerLoading ? t.scanningTokens : t.scanTokens}
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">{t.scannerUniverse}</span>
+                <select
+                  value={scannerUniverse}
+                  onChange={(event) => setScannerUniverse(event.target.value as ScannerUniverse)}
+                  className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="beginner">{t.beginnerTokens}</option>
+                  <option value="advanced">{t.advancedTokens}</option>
+                  <option value="all">{t.allEligibleTokens}</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">{t.positionIntent}</span>
+                <select
+                  value={scannerIntent}
+                  onChange={(event) => setScannerIntent(event.target.value as PositionIntent)}
+                  className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                >
+                  {positionIntents.map((intent) => (
+                    <option key={intent} value={intent}>
+                      {t.positionIntentLabels[intent]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">{t.strategyTimeframe}</span>
+                <select
+                  value={scannerTimeframe}
+                  onChange={(event) => setScannerTimeframe(event.target.value as StrategyTimeframe)}
+                  className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                >
+                  {strategyTimeframes.map((timeframe) => (
+                    <option key={timeframe} value={timeframe}>
+                      {t.timeframeLabels[timeframe]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">{t.maxTokensToScan}</span>
+                <select
+                  value={scannerMaxTokens}
+                  onChange={(event) => setScannerMaxTokens(Number(event.target.value) as (typeof scannerMaxOptions)[number])}
+                  className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                >
+                  {scannerMaxOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {scannerError ? (
+              <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                {scannerError}
+              </div>
+            ) : null}
+
+            {scannerResults.length ? (
+              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                {scannerResults.map((result) => (
+                  <div key={result.symbol} className="rounded-lg border border-slate-200 bg-panel p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {t.possibleMovementToReview}
+                        </div>
+                        <div className="mt-1 text-lg font-semibold text-slate-950">
+                          {result.symbol} - {result.name}
+                        </div>
+                        <p className="mt-1 text-sm leading-5 text-slate-600">{translateMessage(result.reason, t)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => loadScannerResult(result)}
+                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                      >
+                        {t.loadInMainAnalysis}
+                      </button>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <MetricTile label={t.currentPrice} value={formatCurrency(result.price, result.price < 1 ? 6 : 2)} />
+                      <MetricTile
+                        label={t.move24h}
+                        value={formatPercentage(result.percentChange24h)}
+                        tone={result.percentChange24h < 0 ? "negative" : "positive"}
+                      />
+                      <MetricTile label={t.trend} value={t.trendStateLabels[result.trendState]} />
+                      <MetricTile label="RSI 14" value={result.rsi14 === null ? t.notEnoughHistory : result.rsi14.toFixed(0)} />
+                      <MetricTile label={t.maAlignment} value={t.maAlignmentLabels[result.maAlignment]} />
+                      <MetricTile
+                        label={t.riskBadge}
+                        value={t.riskBadgeLabels[result.riskBadge]}
+                        tone={getRiskBadgeTone(result.riskBadge)}
+                      />
+                      <MetricTile label={t.intentAction} value={t.intentActionLabels[result.intentAction]} />
+                      <MetricTile
+                        label={t.stopStatus}
+                        value={t.stopStatusLabels[result.stopStatus]}
+                        tone={result.stopStatus === "stop_breached" ? "negative" : result.stopStatus === "near_stop" ? "warning" : "positive"}
+                      />
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 sm:grid-cols-3">
+                      <div>
+                        <span className="font-semibold text-slate-900">{t.quoteSource}:</span>{" "}
+                        {result.dataSource.quote === "coinmarketcap" ? t.coinMarketCapLiveQuote : t.mockDataFallback}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">{t.historySourceShort}:</span>{" "}
+                        {result.dataSource.history === "coinmarketcap"
+                          ? t.coinMarketCapHistoricalShort
+                          : result.dataSource.history === "estimated"
+                            ? t.estimatedCandlesShort
+                            : t.unavailableHistory}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">{t.backtestSource}:</span>{" "}
+                        {t.backtestSourceLabels[result.dataSource.backtest]}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
           {strategyDecision && strategy && quote ? (
             <section className="grid gap-7 2xl:grid-cols-[minmax(420px,0.86fr)_minmax(0,1.14fr)]">
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
@@ -1175,6 +1591,84 @@ export function PositionStrategyApp() {
                     </ul>
                   </div>
                 ) : null}
+
+                <div className="mt-4 rounded-md border border-slate-200 bg-panel p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-slate-950">{t.strategyExplanation}</div>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{t.aiExplanationNote}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={generateExplanation}
+                      disabled={isExplanationLoading || !exportPayload}
+                      className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isExplanationLoading ? t.generatingExplanation : t.generateExplanation}
+                    </button>
+                  </div>
+
+                  {explanationError ? (
+                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      {explanationError}
+                    </div>
+                  ) : null}
+
+                  {aiExplanationResponse ? (
+                    <div className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
+                      <div className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                        {aiExplanationResponse.source === "provider" ? t.providerConfigured : t.localDeterministicExplanation}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.simpleExplanation}</div>
+                        <p className="mt-1">{aiExplanationResponse.explanation.summary}</p>
+                      </div>
+                      <div className="grid gap-3 xl:grid-cols-2">
+                        <div>
+                          <div className="font-semibold text-slate-950">{t.whatTheSystemSaw}</div>
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            {aiExplanationResponse.explanation.whatTheSystemSaw.map((item) => (
+                              <li key={item}>{translateMessage(item, t)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-950">{t.whyThisDecision}</div>
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            {aiExplanationResponse.explanation.whyThisDecision.map((item) => (
+                              <li key={item}>{translateMessage(item, t)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.riskExplanation}</div>
+                        <p className="mt-1">{translateMessage(aiExplanationResponse.explanation.riskExplanation, t)}</p>
+                      </div>
+                      <div className="grid gap-3 xl:grid-cols-2">
+                        <div>
+                          <div className="font-semibold text-slate-950">{t.whatToWatchNext}</div>
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            {aiExplanationResponse.explanation.whatToWatchNext.map((item) => (
+                              <li key={item}>{translateMessage(item, t)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-950">{t.limitations}</div>
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            {aiExplanationResponse.explanation.limitations.map((item) => (
+                              <li key={item}>{translateMessage(item, t)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      <p className="rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
+                        {aiExplanationResponse.explanation.notFinancialAdvice}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <MetricTile label={t.stopLoss} value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />

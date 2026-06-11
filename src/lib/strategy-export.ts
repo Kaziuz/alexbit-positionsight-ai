@@ -1,9 +1,11 @@
 import type {
   BacktestSpec,
   BacktestResult,
+  AiExplanationMetadata,
   HistoryResponse,
   MarketContext,
   PositionInput,
+  ScannerResult,
   StrategyDecision,
   StrategyExport,
 } from "@/types/strategy";
@@ -329,6 +331,8 @@ export function createStrategyExport(
   context: MarketContext,
   history?: HistoryResponse,
   backtestResult?: BacktestResult,
+  aiExplanation?: AiExplanationMetadata,
+  scannerResults?: ScannerResult[],
 ): StrategyExport {
   const historySource = history?.source ?? context.technicals.historySource ?? "estimated";
   const indicatorSource = historySource === "coinmarketcap" ? "coinmarketcap_ohlcv" : "estimated_candles";
@@ -437,6 +441,19 @@ export function createStrategyExport(
       backtestReady: true,
       limitations,
     },
+    aiExplanation: aiExplanation ?? {
+      enabled: false,
+      source: "not_generated",
+      provider: null,
+      model: null,
+      explanation: null,
+      guardrails: {
+        doesNotOverrideEngine: true,
+        noFinancialAdvice: true,
+        noTradeExecution: true,
+      },
+    },
+    scannerResults: scannerResults?.length ? scannerResults : undefined,
     strategySpec: decision.spec,
     strategyDecision: {
       positionIntent: decision.positionIntent,
