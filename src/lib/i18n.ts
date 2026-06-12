@@ -136,6 +136,12 @@ export const translations = {
     tokenScanner: "Token Scanner",
     scannerSubtitle:
       "Scan eligible tokens for possible movement to review. Results are deterministic and are not buy/sell signals.",
+    scannerScope: "Scan scope",
+    scannerScopeCurrent: "Current selected token",
+    scannerScopeSpecific: "Specific token",
+    scannerScopeGroup: "Token group",
+    scannerCurrentToken: "Current selected token",
+    scannerSpecificToken: "Specific token",
     scannerUniverse: "Token universe",
     beginnerTokens: "Beginner tokens",
     advancedTokens: "Advanced tokens",
@@ -589,7 +595,7 @@ export const translations = {
   },
   es: {
     subtitle:
-      "Inteligencia de posiciones cripto para principiantes con cotizaciones CMC en vivo, contexto estimado, niveles de riesgo visuales y exportaciones listas para backtesting.",
+      "Inteligencia de posiciones cripto para principiantes con cotizaciones CMC en vivo, contexto estimado, niveles de riesgo visuales y exportaciones listas para pruebas.",
     badge: "Skill de estrategia con CoinMarketCap",
     language: "Idioma",
     positionInput: "Datos de posición",
@@ -678,8 +684,8 @@ export const translations = {
     beginnerNote: "Nota para principiantes:",
     noTradeReason: "Razón para no operar",
     warnings: "Advertencias",
-    simpleBacktest: "Backtest simple",
-    backtestSource: "Fuente del backtest",
+    simpleBacktest: "Prueba simple",
+    backtestSource: "Fuente de la prueba",
     candlesUsed: "Velas usadas",
     entryTriggered: "Entrada activada",
     stopHit: "Stop tocado",
@@ -687,12 +693,12 @@ export const translations = {
     backtestResult: "Resultado",
     returnPercentage: "Retorno %",
     estimatedPnl: "P/G estimada",
-    maxDrawdown: "Drawdown máximo",
+    maxDrawdown: "Caída máxima",
     limitations: "Limitaciones",
-    stopLoss: "Stop loss",
+    stopLoss: "Stop de pérdida",
     takeProfit: "Toma de ganancia",
     trailingExit: "Salida dinámica",
-    trailingExitHelper: "Módulo trailing ATR/MA",
+    trailingExitHelper: "Módulo de salida dinámica ATR/MA",
     chartDataNotes: {
       live: "El recorrido del gráfico es estimado hasta que OHLCV histórico esté disponible.",
       mock: "Se están usando datos demo porque la cotización en vivo de CoinMarketCap no está disponible.",
@@ -700,7 +706,7 @@ export const translations = {
       estimatedHistory:
         "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y los indicadores son estimados hasta que el plan permita OHLCV histórico.",
     },
-    backtestReadyJson: "JSON listo para backtesting",
+    backtestReadyJson: "JSON listo para pruebas",
     exportJson: "Exportar JSON",
     strategyExplanation: "Explicación de estrategia",
     generateExplanation: "Generar explicación",
@@ -717,6 +723,12 @@ export const translations = {
     tokenScanner: "Buscador de oportunidades",
     scannerSubtitle:
       "Escanea tokens elegibles para encontrar posibles movimientos a revisar. Los resultados son deterministas y no son señales de compra/venta.",
+    scannerScope: "Alcance del escaneo",
+    scannerScopeCurrent: "Token actual seleccionado",
+    scannerScopeSpecific: "Token específico",
+    scannerScopeGroup: "Grupo de tokens",
+    scannerCurrentToken: "Token actual seleccionado",
+    scannerSpecificToken: "Token específico",
     scannerUniverse: "Universo de tokens",
     beginnerTokens: "Tokens principiantes",
     advancedTokens: "Tokens avanzados",
@@ -743,7 +755,7 @@ export const translations = {
     demoRange: "Rango demo",
     perStrategy: "por estrategia.",
     strategyPrinciples:
-      "Estos modos siguen principios pacientes y centrados en riesgo: evitar operar de más, esperar confirmación, definir invalidación y evitar setups poco claros.",
+      "Estos modos siguen principios pacientes y centrados en riesgo: evitar operar de más, esperar confirmación, definir invalidación y evitar configuraciones poco claras.",
     whatIsThis: "¿Qué es esto?",
     hideExplanation: "Ocultar explicación",
     simpleExplanation: "Explicación simple",
@@ -759,12 +771,12 @@ export const translations = {
     totalCapitalGreaterThanZero: "El capital total debe ser mayor que 0.",
     calculatedPositionSizeUnavailable: "El tamaño de posición calculado no está disponible. Revisa capital, riesgo, entrada y distancia al stop.",
     intradayTradingWarning:
-      "Las temporalidades intradía son más especulativas y suelen estar dominadas por ruido técnico. PositionSight recomienda validar este setup en temporalidad diaria antes de actuar.",
+      "Las temporalidades intradía son más especulativas y suelen estar dominadas por ruido técnico. PositionSight recomienda validar esta configuración en temporalidad diaria antes de actuar.",
     riskAboveOneWarning:
       "Un riesgo superior al 1% es agresivo para este modelo centrado en protección de capital. Considera reducir el riesgo antes de entrar.",
-    atrFallbackWarning: "ATR no está disponible, así que PositionSight usa el fallback de stop por porcentaje.",
+    atrFallbackWarning: "ATR no está disponible, así que PositionSight usa el respaldo de stop por porcentaje.",
     positionSizeEstimatedWarning: "El tamaño de posición usa ATR estimado hasta que OHLCV histórico esté disponible.",
-    positionSizeFallbackWarning: "La distancia al stop no era válida, así que PositionSight usó el fallback por porcentaje.",
+    positionSizeFallbackWarning: "La distancia al stop no era válida, así que PositionSight usó el respaldo por porcentaje.",
     stopLossClampedWarning: "El stop basado en ATR quedaría en cero o menos, así que se ajustó a un nivel positivo seguro.",
     positionSizeInvalidWarning: "El tamaño de posición calculado no está disponible. Revisa capital, riesgo, entrada y distancia al stop.",
     stopBreachWarning:
@@ -775,9 +787,9 @@ export const translations = {
       exit_review: "Precio original de entrada",
     },
     intentEntryPriceTooltips: {
-      analyze_entry: "El precio donde estás considerando una entrada long planeada.",
-      manage_open_position: "Tu precio promedio de entrada para la posición long existente.",
-      exit_review: "El precio original o promedio de entrada para la posición long que estás revisando.",
+      analyze_entry: "El precio donde estás considerando una entrada larga planeada.",
+      manage_open_position: "Tu precio promedio de entrada para la posición larga existente.",
+      exit_review: "El precio original o promedio de entrada para la posición larga que estás revisando.",
     },
     intentActionLabels: {
       evaluate_entry: "Evaluar entrada",
@@ -793,9 +805,9 @@ export const translations = {
       wait_for_confirmation: "Espera confirmación antes de agregar exposición.",
       hold_with_trailing_exit: "Mantener con salida dinámica mientras tendencia y soporte sigan válidos.",
       reduce_risk: "Reduce riesgo o mantén solo si soporte y salida dinámica siguen válidos.",
-      exit_or_reduce: "Revisa salida o reducción de la posición long existente.",
+      exit_or_reduce: "Revisa salida o reducción de la posición larga existente.",
       stop_breached: "Stop perdido. Revisa salida o reducción de riesgo inmediatamente.",
-      no_trade: "No agregues exposición. Protege capital hasta que el setup mejore.",
+      no_trade: "No agregues exposición. Protege capital hasta que la configuración mejore.",
     },
     stopStatusLabels: {
       above_stop: "Sobre el stop",
@@ -815,7 +827,7 @@ export const translations = {
     },
     backtestSourceLabels: {
       historical_cmc: "Histórico CMC",
-      demo_dataset: "Dataset demo",
+      demo_dataset: "Datos demo",
       estimated_from_live_quote: "Estimado desde cotización en vivo",
     },
     winLossLabels: {
@@ -870,30 +882,30 @@ export const translations = {
         entry: "entrada del usuario o entrada planeada",
         current: "cotización más reciente en vivo desde CoinMarketCap",
         stop: "nivel de control de riesgo",
-        takeProfit: "módulo trailing ATR/MA",
+        takeProfit: "módulo de salida dinámica ATR/MA",
         estimatedPath: "ruta visual estimada hasta integrar OHLCV histórico",
       },
       intentMeanings: {
         analyze_entry: {
-          entry: "precio de entrada long planeada",
+          entry: "precio de entrada larga planeada",
           current: "cotización más reciente en vivo desde CoinMarketCap",
           stop: "stop de riesgo para la entrada planeada",
           takeProfit: "referencia inicial de salida dinámica si la entrada confirma",
-          estimatedPath: "ruta estimada del setup hasta que OHLCV histórico esté disponible",
+          estimatedPath: "ruta estimada de la configuración hasta que OHLCV histórico esté disponible",
         },
         manage_open_position: {
-          entry: "entrada promedio de la posición long existente",
+          entry: "entrada promedio de la posición larga existente",
           current: "cotización CoinMarketCap en vivo para la posición abierta",
-          stop: "stop de riesgo de la posición long existente",
+          stop: "stop de riesgo de la posición larga existente",
           takeProfit: "referencia de salida dinámica para gestionar la posición",
           estimatedPath: "ruta estimada de gestión desde entrada hasta decisión de riesgo actual",
         },
         exit_review: {
-          entry: "entrada original o promedio de la posición long en revisión",
+          entry: "entrada original o promedio de la posición larga en revisión",
           current: "cotización CoinMarketCap en vivo para revisar salida",
-          stop: "disparador de salida o reducción de la posición long existente",
+          stop: "disparador de salida o reducción de la posición larga existente",
           takeProfit: "referencia de salida dinámica para proteger ganancias",
-          estimatedPath: "ruta estimada de revisión de salida para una posición long",
+          estimatedPath: "ruta estimada de revisión de salida para una posición larga",
         },
       },
       sourceLabels: {
@@ -963,9 +975,9 @@ export const translations = {
       "Configured risk is too high for a capital-preservation strategy.":
         "El riesgo configurado es demasiado alto para una estrategia de preservación de capital.",
       "Current price is too far from entry to create a realistic risk-managed setup.":
-        "El precio actual está demasiado lejos de la entrada para crear un setup realista con riesgo controlado.",
+        "El precio actual está demasiado lejos de la entrada para crear una configuración realista con riesgo controlado.",
       "Liquidity proxy is too weak for a beginner-friendly setup.":
-        "La estimación de liquidez es demasiado débil para un setup amigable para principiantes.",
+        "La estimación de liquidez es demasiado débil para una configuración amigable para principiantes.",
       "Trend, sentiment, and liquidity are aligned against the trade.":
         "Tendencia, sentimiento y liquidez están alineados contra la operación.",
       "Meme-asset context is high risk and does not have enough liquidity support.":
@@ -973,13 +985,13 @@ export const translations = {
       "Derivatives proxy is unavailable or conflicting while risk is elevated.":
         "El contexto de derivados no está disponible o muestra conflicto mientras el riesgo es elevado.",
       "Intraday context needs stronger liquidity, momentum, and risk control before a setup is usable.":
-        "El contexto intradía necesita más liquidez, momentum y control de riesgo antes de ser usable.",
+        "El contexto intradía necesita más liquidez, impulso y control de riesgo antes de ser usable.",
       "Risk is not controlled enough for a defensive setup while market pressure is elevated.":
-        "El riesgo no está lo bastante controlado para un setup defensivo mientras la presión del mercado es elevada.",
+        "El riesgo no está lo bastante controlado para una configuración defensiva mientras la presión del mercado es elevada.",
       "Market structure is unclear, so waiting for a stronger selected-timeframe close is preferred.":
         "La estructura de mercado no está clara; es mejor esperar un cierre más fuerte en la temporalidad seleccionada.",
       "Entry price is too far from current price for a clean risk setup.":
-        "El precio de entrada está demasiado lejos del precio actual para un setup limpio de riesgo.",
+        "El precio de entrada está demasiado lejos del precio actual para una configuración limpia de riesgo.",
       "Intraday timeframes are more speculative and need stronger confirmation.":
         "Las temporalidades intradía son más especulativas y necesitan más confirmación.",
       "Liquidity proxy is weak, so forced strategy signals are unreliable.":
@@ -987,15 +999,37 @@ export const translations = {
       "Meme assets can move quickly; keep position risk small and wait for stronger confirmation.":
         "Los meme assets pueden moverse rápido; mantén bajo el riesgo y espera más confirmación.",
       "Breakout + Retest needs stronger momentum, volume, and a clear retest or breakout area.":
-        "Ruptura + retesteo necesita más momentum, volumen y una zona clara de ruptura o retesteo.",
+        "Ruptura + retesteo necesita más impulso, volumen y una zona clara de ruptura o retesteo.",
       "Trend Confirmation needs price above support and RSI that is not extremely overheated.":
         "Confirmación de tendencia necesita precio sobre soporte y un RSI que no esté extremadamente sobrecalentado.",
       "Defensive Rebound only fits when risk is controlled and price is near support.":
         "Rebote defensivo solo encaja cuando el riesgo está controlado y el precio está cerca de soporte.",
       "Auto mode sees a possible setup, but Risk Check is still valid for conservative traders.":
-        "El modo Auto ve un posible setup, pero Revisión de riesgo sigue siendo válida para perfiles conservadores.",
+        "El modo Auto ve una posible configuración, pero Revisión de riesgo sigue siendo válida para perfiles conservadores.",
       "Risk or market structure is unclear for this selected strategy.":
         "El riesgo o la estructura de mercado no están claros para esta estrategia seleccionada.",
+      "Risk or market structure is unclear for this strategy timeframe.":
+        "El riesgo o la estructura de mercado no están claros para esta temporalidad de estrategia.",
+      "Check whether price is losing stop, support, trailing-exit protection, or risk context before deciding to reduce or exit.":
+        "Revisa si el precio está perdiendo el stop, el soporte, la protección de salida dinámica o el contexto de riesgo antes de decidir reducir o salir.",
+      "Review whether holding remains valid, whether to reduce risk, or whether trailing-exit protection should lead.":
+        "Revisa si mantener sigue siendo válido, si conviene reducir riesgo o si la protección de salida dinámica debe guiar la decisión.",
+      "Wait for price to hold above the breakout area after a retest.":
+        "Espera que el precio se mantenga sobre la zona de ruptura después de un retesteo.",
+      "Wait for the selected timeframe to close above support or the trend filter.":
+        "Espera un cierre de la temporalidad seleccionada sobre soporte o sobre el filtro de tendencia.",
+      "Wait for stabilization near support and avoid averaging down without confirmation.":
+        "Espera estabilización cerca del soporte y evita promediar a la baja sin confirmación.",
+      "Wait for risk, liquidity, and market structure to improve before taking a new setup.":
+        "Espera a que mejoren el riesgo, la liquidez y la estructura de mercado antes de buscar una nueva configuración.",
+      "Exit review means checking whether risk controls or market structure argue for reducing exposure. It is not an execution command.":
+        "La revisión de salida evalúa si los controles de riesgo o la estructura de mercado justifican reducir exposición. No es una orden de ejecución.",
+      "Open-position management focuses on holding, reducing, waiting, or using trailing exits instead of adding risk automatically.":
+        "La gestión de posición abierta se enfoca en mantener, reducir, esperar o usar salidas dinámicas en vez de agregar riesgo automáticamente.",
+      "No-trade means protecting capital when the setup is not clear enough.":
+        "No operar significa proteger capital cuando la configuración no está suficientemente clara.",
+      "PositionSight compares the selected setup against trend, risk, liquidity, and momentum context before recommending it.":
+        "PositionSight compara la configuración seleccionada contra tendencia, riesgo, liquidez e impulso antes de recomendarla.",
       "Not enough historical candles to calculate ema20.":
         "Historial insuficiente para calcular MA 20.",
       "Not enough historical candles to calculate ema50.":
@@ -1013,21 +1047,21 @@ export const translations = {
       "Not enough historical candles to calculate resistance.":
         "Historial insuficiente para calcular resistencia.",
       "ATR is unavailable or estimated, so percent-based stop fallback is used.":
-        "ATR no está disponible o es estimado, así que se usa el fallback de stop por porcentaje.",
+        "ATR no está disponible o es estimado, así que se usa el respaldo de stop por porcentaje.",
       "ATR-based stop would be at or below zero, so stop loss was clamped to a safe positive level.":
         "El stop basado en ATR quedaría en cero o menos, así que se ajustó a un nivel positivo seguro.",
       "Current price is below the stop. Review exit/risk immediately; this is not a fresh entry setup.":
         "El precio actual está por debajo del stop. Revisa salida/riesgo inmediatamente; esto no es una entrada nueva.",
       "Validate a planned long entry against risk, stop distance, trend, liquidity, and confirmation.":
-        "Valida una entrada long planeada contra riesgo, distancia al stop, tendencia, liquidez y confirmación.",
+        "Valida una entrada larga planeada contra riesgo, distancia al stop, tendencia, liquidez y confirmación.",
       "Manage the existing long position; do not add exposure while price is below the stop.":
-        "Gestiona la posición long existente; no agregues exposición mientras el precio esté debajo del stop.",
+        "Gestiona la posición larga existente; no agregues exposición mientras el precio esté debajo del stop.",
       "Manage an existing long position with hold, reduce, wait, or trailing-exit conditions.":
-        "Gestiona una posición long existente con condiciones de mantener, reducir, esperar o salida dinámica.",
+        "Gestiona una posición larga existente con condiciones de mantener, reducir, esperar o salida dinámica.",
       "Review whether the existing long position should be reduced or exited.":
-        "Revisa si la posición long existente debe reducirse o cerrarse.",
+        "Revisa si la posición larga existente debe reducirse o cerrarse.",
       "Wait for the selected timeframe to confirm the setup before adding exposure.":
-        "Espera que la temporalidad seleccionada confirme el setup antes de agregar exposición.",
+        "Espera que la temporalidad seleccionada confirme la configuración antes de agregar exposición.",
       "Confirm whether the stop breach persists on the selected timeframe before deciding reduce or exit.":
         "Confirma si la pérdida del stop persiste en la temporalidad seleccionada antes de decidir reducir o salir.",
       "Review support, stop distance, and trailing-exit behavior before increasing or reducing exposure.":
@@ -1035,25 +1069,37 @@ export const translations = {
       "Check stop, support, trailing-exit protection, and market context before deciding to reduce or exit.":
         "Revisa stop, soporte, protección de salida dinámica y contexto de mercado antes de decidir reducir o salir.",
       "Analyze entry mode sizes a possible new long position from capital, defined risk, and stop distance.":
-        "El modo Analizar entrada dimensiona una posible nueva posición long desde capital, riesgo definido y distancia al stop.",
+        "El modo Analizar entrada dimensiona una posible nueva posición larga desde capital, riesgo definido y distancia al stop.",
       "Open-position management uses your existing holdings. It does not calculate a fresh buy or add exposure automatically.":
         "La gestión de posición abierta usa tus tenencias existentes. No calcula una compra nueva ni agrega exposición automáticamente.",
       "Exit review is a long-position risk review. It helps decide hold, reduce, or exit; it is not short selling.":
-        "La revisión de salida es una revisión de riesgo de una posición long. Ayuda a decidir mantener, reducir o salir; no es venta en corto.",
+        "La revisión de salida es una revisión de riesgo de una posición larga. Ayuda a decidir mantener, reducir o salir; no es venta en corto.",
       "A breached stop means the position is no longer healthy under this risk model. This is not a fresh entry setup.":
-        "Un stop perdido significa que la posición ya no está sana bajo este modelo de riesgo. Esto no es un setup de entrada nueva.",
+        "Un stop perdido significa que la posición ya no está sana bajo este modelo de riesgo. Esto no es una configuración de entrada nueva.",
       "Sell review means protecting an existing long position. It does not open a short position or execute a sale.":
-        "La revisión de venta significa proteger una posición long existente. No abre una posición corta ni ejecuta una venta.",
+        "La revisión de venta significa proteger una posición larga existente. No abre una posición corta ni ejecuta una venta.",
       "Simple deterministic backtest v1; not a professional trading simulator.":
-        "Backtest v1 simple y determinístico; no es un simulador profesional de trading.",
+        "Prueba v1 simple y determinística; no es un simulador profesional de operaciones.",
       "No live execution, no wallet connection, and no exchange order placement.":
-        "Sin ejecución en vivo, sin conexión de wallet y sin colocación de órdenes en exchanges.",
+        "Sin ejecución en vivo, sin conexión de billetera y sin colocación de órdenes en mercados.",
       "Uses CoinMarketCap historical OHLCV candles when available; execution order inside each candle is simplified.":
         "Usa velas OHLCV históricas de CoinMarketCap cuando están disponibles; el orden de ejecución dentro de cada vela se simplifica.",
       "Historical OHLCV is unavailable on the current response or plan; candles are estimated from live quote context.":
         "OHLCV histórico no está disponible con la respuesta o plan actual; las velas se estiman desde el contexto de cotización en vivo.",
       "No history response was available in the UI; a small demo dataset was generated for illustration only.":
-        "No hubo respuesta de historial disponible en la UI; se generó un dataset demo pequeño solo para ilustración.",
+        "No hubo respuesta de historial disponible en la UI; se generó un conjunto de datos demo pequeño solo para ilustración.",
+      "Backtest used CoinMarketCap historical OHLCV candles.":
+        "La prueba usó velas OHLCV históricas de CoinMarketCap.",
+      "Backtest used estimated candles from live quote context because historical OHLCV was unavailable.":
+        "La prueba usó velas estimadas desde el contexto de cotización porque OHLCV histórico no estaba disponible.",
+      "Backtest used a documented demo dataset because no history candles were available.":
+        "La prueba usó datos demo documentados porque no había velas históricas disponibles.",
+      "Strategy type is no_trade, so the backtest records capital-protection behavior instead of opening a new position.":
+        "El tipo de estrategia es no operar, así que la prueba registra protección de capital en vez de abrir una posición nueva.",
+      "Manage-open-position mode assumes the long position is already open.":
+        "El modo de gestión de posición abierta asume que la posición larga ya está abierta.",
+      "Exit-review mode checks reduce/exit behavior for an existing long position; it does not simulate short selling.":
+        "El modo de revisión de salida evalúa reducir o salir de una posición larga existente; no simula venta en corto.",
     },
     decisionCopy: {
       autoWhy: "Auto recomendado eligió el mejor ajuste para el contexto actual:",
@@ -1076,20 +1122,20 @@ export const translations = {
       exit_review: {
         prefix: "Revisión de salida:",
         nextConfirmation: "Revisa stop, salida dinámica, pérdida de soporte, riesgo y contexto de mercado antes de decidir si reducir o salir es más limpio.",
-        beginnerExplanation: "La revisión de salida se enfoca en reducir riesgo o salir de una posición cuando el setup se debilita. No ejecuta una venta.",
+        beginnerExplanation: "La revisión de salida se enfoca en reducir riesgo o salir de una posición cuando la configuración se debilita. No ejecuta una venta.",
       },
     },
     nextConfirmationMessages: {
       trend_following_pullback: "Espera un cierre de la temporalidad seleccionada sobre soporte o el filtro de tendencia.",
       breakout_with_volume: "Espera que el precio se mantenga sobre la zona de ruptura después de un retesteo.",
       defensive_mean_reversion: "Espera estabilización cerca del soporte y evita promediar sin confirmación.",
-      no_trade: "Espera a que mejoren riesgo, liquidez y estructura de mercado antes de buscar un nuevo setup.",
+      no_trade: "Espera a que mejoren riesgo, liquidez y estructura de mercado antes de buscar una nueva configuración.",
     },
     beginnerVerdictMessages: {
-      good: "Este setup es el ajuste más limpio por ahora, pero los límites de riesgo siguen siendo importantes.",
-      needs_confirmation: "Este setup no está rechazado, pero un principiante debería esperar más confirmación.",
-      poor_fit: "Este setup no encaja de forma limpia. Trátalo como investigación, no como señal de acción.",
-      no_trade_recommended: "No operar significa proteger capital cuando el setup no está suficientemente claro.",
+      good: "Esta configuración es el ajuste más limpio por ahora, pero los límites de riesgo siguen siendo importantes.",
+      needs_confirmation: "Esta configuración no está rechazada, pero un principiante debería esperar más confirmación.",
+      poor_fit: "Esta configuración no encaja de forma limpia. Trátala como investigación, no como señal de acción.",
+      no_trade_recommended: "No operar significa proteger capital cuando la configuración no está suficientemente clara.",
     },
     tooltips: {
       tokenList: "Modo Principiante muestra una lista más corta; Avanzado muestra más tokens soportados por el hackathon.",
@@ -1098,15 +1144,15 @@ export const translations = {
       positionIntent:
         "Elige si quieres analizar una posible entrada, gestionar una posición existente o revisar condiciones de salida y reducción.",
       entryPrice: "El precio donde compraste, o el precio donde estás considerando entrar.",
-      positionSize: "Cantidad calculada de tokens para este setup de riesgo.",
+      positionSize: "Cantidad calculada de tokens para esta configuración de riesgo.",
       totalCapital: "Tu base de capital para calcular el tamaño de posición según riesgo.",
-      calculatedPositionSize: "Tamaño readonly calculado con capital, riesgo, precio de entrada, ATR y distancia al stop.",
-      currentPositionSize: "Cuántos tokens o monedas mantienes actualmente en la posición long existente.",
+      calculatedPositionSize: "Tamaño de solo lectura calculado con capital, riesgo, precio de entrada, ATR y distancia al stop.",
+      currentPositionSize: "Cuántos tokens o monedas mantienes actualmente en la posición larga existente.",
       strategyTimeframe:
         "Elige la temporalidad para evaluar la estrategia. Temporalidades cortas son más especulativas y requieren más confirmación; temporalidades altas son mejores para decisiones más pacientes.",
       strategyMode:
         "Auto deja que PositionSight elija la estrategia más adecuada. Manual te permite probar una estrategia específica y ver si encaja.",
-      maxRiskPercentage: "El porcentaje máximo del precio de entrada que estás dispuesto a arriesgar si el setup falla.",
+      maxRiskPercentage: "El porcentaje máximo del precio de entrada que estás dispuesto a arriesgar si la configuración falla.",
     },
     strategyModeLabels: {
       auto: "Auto recomendado",
@@ -1132,11 +1178,11 @@ export const translations = {
     strategyExplanations: {
       auto: {
         simple:
-          "Deja que PositionSight elija la estrategia que mejor encaja según contexto de mercado, riesgo, tendencia, liquidez y momentum.",
+          "Deja que PositionSight elija la estrategia que mejor encaja según contexto de mercado, riesgo, tendencia, liquidez e impulso.",
         bestUsedWhen: "Ideal para principiantes o cuando quieres una recomendación centrada en riesgo.",
         avoidWhen: "Evítalo si quieres probar manualmente una idea de estrategia específica.",
         checks: "Revisa todas las estrategias disponibles y puede elegir no operar cuando el riesgo es malo.",
-        beginnerNote: "Empieza aquí si no sabes qué setup encaja con el contexto actual.",
+        beginnerNote: "Empieza aquí si no sabes qué configuración encaja con el contexto actual.",
       },
       trend_confirmation: {
         simple: "Busca un setup donde el mercado muestra suficiente fuerza para continuar después de confirmar.",

@@ -7,9 +7,15 @@ async function getExportJson(page: Page) {
     schemaVersion?: string;
     skill?: unknown;
     inputSchema?: unknown;
+    symbol?: string;
+    entryPrice?: number;
+    positionSize?: number;
+    totalCapital?: number;
+    calculatedPositionSize?: number;
     dataProvenance?: unknown;
     dataRequirements?: unknown;
     strategySpec?: {
+      asset?: string;
       dataUsed?: { currentPrice?: number };
       strategyType?: string;
     };
@@ -73,6 +79,67 @@ async function getExportJson(page: Page) {
   };
 }
 
+async function getCompleteExportJson(page: Page) {
+  await expect(page.locator("pre")).toContainText('"schemaVersion"', { timeout: 20_000 });
+  await expect(page.locator("pre")).toContainText('"backtestResult"', { timeout: 20_000 });
+  await expect(page.locator("pre")).toContainText('"candlesUsed"', { timeout: 20_000 });
+
+  return getExportJson(page);
+}
+
+async function getNonJsonBodyText(page: Page) {
+  return page.locator("body").evaluate((body) => {
+    const clone = body.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("pre").forEach((node) => node.remove());
+
+    return clone.innerText;
+  });
+}
+
+function expectValidStrategyExport(
+  payload: Awaited<ReturnType<typeof getExportJson>>,
+  rawJson: string,
+  symbol: string,
+  intent: "analyze_entry" | "manage_open_position" | "exit_review",
+) {
+  for (const key of [
+    "schemaVersion",
+    "skill",
+    "inputSchema",
+    "symbol",
+    "entryPrice",
+    "totalCapital",
+    "strategyTimeframe",
+    "positionIntent",
+    "strategySpec",
+    "strategyDecision",
+    "marketContext",
+    "dataProvenance",
+    "backtestSpec",
+    "executionAssumptions",
+    "validation",
+  ] as const) {
+    expect(payload[key], `${symbol} ${intent} missing ${key}`).toBeTruthy();
+  }
+
+  expect(payload.symbol).toBe(symbol);
+  expect(payload.strategySpec?.asset).toBe(symbol);
+  expect(payload.positionIntent).toBe(intent);
+  expect(payload.strategyDecision?.positionIntent).toBe(intent);
+  expect(typeof payload.entryPrice).toBe("number");
+  expect(typeof payload.totalCapital).toBe("number");
+  expect(typeof (payload.positionSize ?? payload.calculatedPositionSize)).toBe("number");
+  expect(["low", "medium", "high", "no_trade"]).toContain(payload.riskBadge);
+  expect(payload.history?.indicators ?? payload.marketContext).toBeTruthy();
+  expect(payload.backtestResult?.candlesUsed).toBeGreaterThan(0);
+  expect(["historical_cmc", "estimated_from_live_quote", "demo_dataset"]).toContain(payload.backtestResult?.backtestSource);
+  expect(["coinmarketcap", "mock"]).toContain((payload.dataProvenance as { source?: string }).source);
+  expect(["coinmarketcap", "estimated"]).toContain((payload.dataProvenance as { historySource?: string }).historySource);
+  expect(payload.executionAssumptions?.allowShort).toBe(false);
+  expect(payload.validation?.limitations?.join(" ")).toMatch(/not financial advice|no live execution/i);
+  expect(rawJson).not.toMatch(/CMC_API_KEY|AI_API_KEY|\.env\.local|your_provider_api_key_here/i);
+}
+
 async function selectAda(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Advanced", exact: true }).click();
@@ -96,16 +163,19 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Analizar entrada", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Gestionar posición abierta", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Revisar salida / venta", exact: true })).toBeVisible();
+  await expect(page.locator("pre")).toContainText('"schemaVersion"', { timeout: 20_000 });
   await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
   await expect(page.getByText("Ajuste de estrategia", { exact: true })).toBeVisible();
   await expect(page.getByText("Modo de tamaño", { exact: true })).toBeVisible();
-  await expect(page.getByText("Backtest simple", { exact: true })).toBeVisible();
-  await expect(page.getByText("Fuente del backtest", { exact: true })).toBeVisible();
+  await expect(page.getByText("Prueba simple", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fuente de la prueba", { exact: true })).toBeVisible();
+  await expect(page.getByText("Alcance del escaneo", { exact: true })).toBeVisible();
   await expect(page.locator("header").getByText("Soporte", { exact: true })).toHaveCount(0);
   await expect(page.locator("header").getByText("Resistencia", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Soporte estimado|Soporte/).first()).toBeVisible();
   await expect(page.getByText(/Resistencia estimada|Resistencia/).first()).toBeVisible();
   await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
+  expect(await getNonJsonBodyText(page)).not.toContain("Risk or market structure is unclear");
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
@@ -195,6 +265,133 @@ test("history API returns candles and indicators or estimated fallback", async (
   for (const key of ["ma20", "ma50", "ma200", "rsi14", "atr14", "averageVolume", "support", "resistance"]) {
     expect(payload.indicators).toHaveProperty(key);
   }
+});
+
+test("day 10, 11, and 13 validation matrix covers requested tokens, intents, languages, chart, backtest, and export", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+
+  const tokens = ["BNB", "ETH", "LINK", "AVAX", "CAKE", "TWT", "AAVE", "UNI", "ATOM", "FIL"];
+  const intents = ["analyze_entry", "manage_open_position", "exit_review"] as const;
+  const labels = {
+    en: {
+      languageButton: "English",
+      advanced: "Advanced",
+      chartTitle: "Entry vs current price",
+      riskBadge: "Risk badge",
+      backtest: "Simple Backtest",
+      export: "Backtest-ready JSON",
+      chartPathNote: /Chart path is estimated|Latest quote and historical candles/i,
+      chartMarkers: ["Stop", "Entry", "Current", "Trailing Exit"],
+      intentLabels: {
+        analyze_entry: "Analyze entry",
+        manage_open_position: "Manage open position",
+        exit_review: "Exit / Sell review",
+      },
+      intentPanelText: {
+        analyze_entry: "This checks whether a new entry is worth planning.",
+        manage_open_position: "This checks whether an open position should be held, reduced, or protected.",
+        exit_review: "This checks whether the position should be reduced, exited, or monitored.",
+      },
+      absentText: "Temporalidad de estrategia",
+    },
+    es: {
+      languageButton: "Español",
+      advanced: "Avanzado",
+      chartTitle: "Entrada vs precio actual",
+      riskBadge: "Nivel de riesgo",
+      backtest: "Prueba simple",
+      export: "JSON listo para pruebas",
+      chartPathNote: /recorrido del gráfico|velas históricas/i,
+      chartMarkers: ["Stop", "Entrada", "Actual", "Salida dinámica"],
+      intentLabels: {
+        analyze_entry: "Analizar entrada",
+        manage_open_position: "Gestionar posición abierta",
+        exit_review: "Revisar salida / venta",
+      },
+      intentPanelText: {
+        analyze_entry: "Esto revisa si vale la pena planear una entrada nueva.",
+        manage_open_position: "Esto revisa si una posición abierta debe mantenerse, reducirse o protegerse.",
+        exit_review: "Esto revisa si la posición debe reducirse, cerrarse o monitorearse.",
+      },
+      absentText: "This checks whether",
+    },
+  };
+
+  await page.goto("/");
+
+  for (const language of ["en", "es"] as const) {
+    await page.getByRole("button", { name: labels[language].languageButton, exact: true }).click();
+    await expect(page.getByRole("button", { name: labels[language].advanced, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: labels[language].advanced, exact: true }).click();
+    await expect(page.locator("body")).not.toContainText(labels[language].absentText);
+
+    for (const symbol of tokens) {
+      await page.locator("form select").selectOption(symbol);
+      await expect(page.locator("pre")).toContainText(`"asset": "${symbol}"`, { timeout: 20_000 });
+
+      for (const intent of intents) {
+        await page.getByRole("button", { name: labels[language].intentLabels[intent], exact: true }).click();
+        await expect(page.locator("pre")).toContainText(`"positionIntent": "${intent}"`, { timeout: 20_000 });
+
+        const payload = await getCompleteExportJson(page);
+        const rawJson = await page.locator("pre").innerText();
+        expectValidStrategyExport(payload, rawJson, symbol, intent);
+
+        await expect(page.getByText(labels[language].chartTitle, { exact: true })).toBeVisible();
+        await expect(page.getByRole("application").first()).toBeVisible();
+        await expect(page.getByText(labels[language].chartPathNote).first()).toBeVisible();
+        for (const marker of labels[language].chartMarkers) {
+          await expect(page.getByText(marker, { exact: true }).first()).toBeVisible();
+        }
+        await expect(page.getByText(labels[language].riskBadge, { exact: true }).first()).toBeVisible();
+        await expect(page.getByText(labels[language].intentPanelText[intent], { exact: true })).toBeVisible();
+        await expect(page.getByText(labels[language].backtest, { exact: true })).toBeVisible();
+        await expect(page.getByText(labels[language].export, { exact: true })).toBeVisible();
+        await expect(page.locator("body")).not.toContainText(/AI_API_KEY|CMC_API_KEY|\.env\.local|OpenAI|ChatGPT/i);
+      }
+    }
+  }
+});
+
+test("scanner scope supports current selected and specific token modes in English and Spanish", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/");
+
+  await expect(page.getByText("Scan scope", { exact: true })).toBeVisible();
+
+  const scanScopeSelect = page.getByRole("combobox", { name: "Scan scope", exact: true });
+  await scanScopeSelect.selectOption("specific");
+  await page.getByRole("combobox", { name: "Specific token", exact: true }).selectOption("FIL");
+  await page.getByRole("button", { name: "Scan tokens", exact: true }).click();
+  await expect(page.locator("div").filter({ hasText: /^FIL - Filecoin$/ }).first()).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => page.getByText("Possible movement to review", { exact: true }).count()).toBe(1);
+
+  await page.locator("form select").selectOption("LINK");
+  await expect(page.locator("pre")).toContainText('"asset": "LINK"', { timeout: 20_000 });
+  await scanScopeSelect.selectOption("current");
+  await page.getByRole("button", { name: "Scan tokens", exact: true }).click();
+  await expect(page.locator("div").filter({ hasText: /^LINK - Chainlink$/ }).first()).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => page.getByText("Possible movement to review", { exact: true }).count()).toBe(1);
+
+  await page.getByRole("button", { name: "Español", exact: true }).click();
+  await expect(page.getByText("Alcance del escaneo", { exact: true })).toBeVisible();
+  expect(await getNonJsonBodyText(page)).not.toContain("Risk or market structure is unclear");
+
+  const alcanceSelect = page.getByRole("combobox", { name: "Alcance del escaneo", exact: true });
+  await alcanceSelect.selectOption("specific");
+  await page.getByRole("combobox", { name: "Token específico", exact: true }).selectOption("TWT");
+  await page.getByRole("button", { name: "Escanear tokens", exact: true }).click();
+  await expect(page.locator("div").filter({ hasText: /^TWT - Trust Wallet Token$/ }).first()).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => page.getByText("Posible movimiento a revisar", { exact: true }).count()).toBe(1);
+
+  await page.locator("form select").selectOption("CAKE");
+  await expect(page.locator("pre")).toContainText('"asset": "CAKE"', { timeout: 20_000 });
+  await alcanceSelect.selectOption("current");
+  await page.getByRole("button", { name: "Escanear tokens", exact: true }).click();
+  await expect(page.locator("div").filter({ hasText: /^CAKE - PancakeSwap$/ }).first()).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => page.getByText("Posible movimiento a revisar", { exact: true }).count()).toBe(1);
 });
 
 test("risk-first sizing, warnings, chart labels, and export stay coherent", async ({ page }) => {
@@ -433,7 +630,7 @@ test("day 7 and day 8 targeted ADA QA scenarios", async ({ page }) => {
 
   await page.getByRole("button", { name: "Español" }).click();
   await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
-  await expect(page.getByText("Backtest simple", { exact: true })).toBeVisible();
+  await expect(page.getByText("Prueba simple", { exact: true })).toBeVisible();
   await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
 });
 
@@ -453,9 +650,9 @@ test("token scanner runs deterministic scan and can load a result", async ({ pag
   await expect(page.getByText(/Historical CMC|Estimated candles|History unavailable/).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Load in main analysis", exact: true }).first().click();
-  await expect(page.locator("pre")).toContainText('"asset": "ETH"');
 
   const payload = await getExportJson(page);
+  expect(payload.strategySpec?.asset).toBeTruthy();
   expect(payload.strategyTimeframe).toBe("1d");
   expect(payload.strategyDecision?.positionIntent).toBe("analyze_entry");
   expect(Array.isArray(payload.scannerResults)).toBe(true);

@@ -1,5 +1,5 @@
 import type { AiExplanationResult, BacktestResult, StrategyExport } from "@/types/strategy";
-import type { Language } from "./i18n";
+import { translations, type Language } from "./i18n";
 
 type ExplanationInput = {
   artifact: StrategyExport;
@@ -33,14 +33,14 @@ function getBacktestSourceText(backtestResult: BacktestResult | undefined, langu
 
   if (language === "es") {
     if (backtestResult.backtestSource === "historical_cmc") {
-      return `Backtest simple con ${backtestResult.candlesUsed} velas históricas de CoinMarketCap.`;
+      return `Prueba simple con ${backtestResult.candlesUsed} velas históricas de CoinMarketCap.`;
     }
 
     if (backtestResult.backtestSource === "estimated_from_live_quote") {
-      return `Backtest simple con ${backtestResult.candlesUsed} velas estimadas desde el contexto de cotización.`;
+      return `Prueba simple con ${backtestResult.candlesUsed} velas estimadas desde el contexto de cotización.`;
     }
 
-    return `Backtest simple con ${backtestResult.candlesUsed} velas de demo documentadas.`;
+    return `Prueba simple con ${backtestResult.candlesUsed} velas demo documentadas.`;
   }
 
   if (backtestResult.backtestSource === "historical_cmc") {
@@ -52,6 +52,52 @@ function getBacktestSourceText(backtestResult: BacktestResult | undefined, langu
   }
 
   return `Simple backtest used ${backtestResult.candlesUsed} documented demo candles.`;
+}
+
+function translateArtifactMessage(message: string | undefined, language: Language) {
+  if (!message) {
+    return "";
+  }
+
+  if (language === "es") {
+    const strategyLabelTranslations: Record<string, string> = {
+      "trend confirmation": "confirmación de tendencia",
+      "breakout and retest": "ruptura y retesteo",
+      "defensive rebound": "rebote defensivo",
+      "risk check / no-trade": "revisión de riesgo / no operar",
+      "trend following pullback": "confirmación de tendencia",
+      "breakout with volume": "ruptura con volumen",
+      "defensive mean reversion": "rebote defensivo",
+      "no trade": "no operar",
+    };
+    const autoSelectedMatch = message.match(/^Auto Recommended selected this because the strongest fit is (.+)\.$/);
+
+    if (autoSelectedMatch) {
+      const strategyLabel = strategyLabelTranslations[autoSelectedMatch[1]] ?? autoSelectedMatch[1];
+
+      return `Auto recomendado eligió esto porque el mejor ajuste es ${strategyLabel}.`;
+    }
+
+    const selectedModeMatch = message.match(/^The selected (.+) mode matches the current market context\.$/);
+
+    if (selectedModeMatch) {
+      const strategyLabel = strategyLabelTranslations[selectedModeMatch[1]] ?? selectedModeMatch[1];
+
+      return `El modo ${strategyLabel} seleccionado encaja con el contexto actual de mercado.`;
+    }
+
+    const autoPrefersMatch = message.match(/^Auto mode prefers (.+), while the selected mode needs more confirmation\.$/);
+
+    if (autoPrefersMatch) {
+      const strategyLabel = strategyLabelTranslations[autoPrefersMatch[1]] ?? autoPrefersMatch[1];
+
+      return `El modo Auto prefiere ${strategyLabel}, mientras el modo seleccionado necesita más confirmación.`;
+    }
+  }
+
+  const t = translations[language];
+
+  return t.messageTranslations[message as keyof typeof t.messageTranslations] ?? message;
 }
 
 export function buildDeterministicExplanation(input: ExplanationInput): AiExplanationResult {
@@ -66,10 +112,22 @@ export function buildDeterministicExplanation(input: ExplanationInput): AiExplan
   const strategyMode = artifact.selectedStrategyMode ?? decision.selectedStrategyMode;
   const backtestText = getBacktestSourceText(artifact.backtestResult, language);
   const sourceText = sourceLabel(artifact, language);
+  const t = translations[language];
+  const localizedIntent = t.positionIntentLabels[artifact.positionIntent];
+  const localizedRiskBadge = t.riskBadgeLabels[riskBadge];
+  const localizedStopStatus = t.stopStatusLabels[stopStatus];
+  const localizedIntentAction = t.intentActionLabels[decision.intentAction];
+  const localizedStrategyMode = t.strategyModeLabels[strategyMode];
+  const localizedRiskVerdict = t.riskVerdictLabels[artifact.finalRiskVerdict];
+  const localizedNoTradeReason = translateArtifactMessage(noTradeReason, language);
+  const localizedWarnings = warnings.map((warning) => translateArtifactMessage(warning, language));
+  const localizedLimitations = artifact.backtestResult?.limitations.map((limitation) =>
+    translateArtifactMessage(limitation, language),
+  );
 
   if (language === "es") {
     return {
-      summary: `El motor determinista evaluó ${artifact.positionIntent} para ${spec.asset} en ${artifact.strategyTimeframe} y mantiene el nivel de riesgo "${riskBadge}". La acción de intención es "${decision.intentAction}" y el estado del stop es "${stopStatus}".`,
+      summary: `El motor determinista evaluó ${localizedIntent} para ${spec.asset} en ${artifact.strategyTimeframe} y mantiene el nivel de riesgo "${localizedRiskBadge}". La acción de intención es "${localizedIntentAction}" y el estado del stop es "${localizedStopStatus}".`,
       whatTheSystemSaw: compactList([
         `Precio actual: ${context.quote.price}. Movimiento 24h: ${context.quote.percentChange24h}%.`,
         `Tendencia: ${context.technicals.trendState}. RSI 14: ${context.technicals.rsi14}.`,
@@ -78,21 +136,21 @@ export function buildDeterministicExplanation(input: ExplanationInput): AiExplan
         backtestText,
       ]),
       whyThisDecision: compactList([
-        `Modo de estrategia preservado: ${strategyMode}.`,
-        `Veredicto determinista preservado: ${artifact.finalRiskVerdict}.`,
-        decision.whyThisStrategy,
-        noTradeReason ? `Razón no-trade: ${noTradeReason}.` : undefined,
+        `Modo de estrategia preservado: ${localizedStrategyMode}.`,
+        `Veredicto determinista preservado: ${localizedRiskVerdict}.`,
+        translateArtifactMessage(decision.whyThisStrategy, language),
+        localizedNoTradeReason ? `Razón para no operar: ${localizedNoTradeReason}.` : undefined,
       ]),
-      riskExplanation: `El nivel "${riskBadge}" viene del motor de reglas usando distancia al stop, riesgo configurado, liquidez, tendencia, estado del stop y ajuste de estrategia. Esta explicación no cambia ese resultado.`,
+      riskExplanation: `El nivel "${localizedRiskBadge}" viene del motor de reglas usando distancia al stop, riesgo configurado, liquidez, tendencia, estado del stop y ajuste de estrategia. Esta explicación no cambia ese resultado.`,
       whatToWatchNext: compactList([
-        decision.nextConfirmation,
+        translateArtifactMessage(decision.nextConfirmation, language),
         `Vigilar si el precio respeta el stop ${spec.stopLoss} y el nivel de salida dinámica ${spec.takeProfit}.`,
-        warnings[0],
+        localizedWarnings[0],
       ]),
       limitations: compactList([
         "La explicación es determinista y no ejecuta operaciones.",
         "No hay conexión de wallet, exchange ni firma de transacciones.",
-        ...(artifact.backtestResult?.limitations ?? []),
+        ...(localizedLimitations ?? []),
       ]),
       notFinancialAdvice:
         "Esto es una explicación educativa del resultado determinista de PositionSight AI. No es asesoría financiera.",

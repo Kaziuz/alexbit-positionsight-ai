@@ -117,6 +117,7 @@ function getRiskBadgeTone(badge: RiskBadge) {
 
 type TranslationSet = (typeof translations)[Language];
 type ScannerUniverse = "beginner" | "advanced" | "all";
+type ScannerScope = "current" | "specific" | "group";
 type ExplainApiResponse = {
   source: Exclude<AiExplanationSource, "not_generated">;
   provider: string;
@@ -128,6 +129,45 @@ type ExplainApiResponse = {
 function translateMessage(message: string | undefined, t: TranslationSet) {
   if (!message) {
     return "";
+  }
+
+  const isSpanish = t.language === "Idioma";
+
+  if (isSpanish) {
+    const strategyLabelTranslations: Record<string, string> = {
+      "trend confirmation": "confirmación de tendencia",
+      "breakout and retest": "ruptura y retesteo",
+      "defensive rebound": "rebote defensivo",
+      "risk check / no-trade": "revisión de riesgo / no operar",
+      "trend following pullback": "confirmación de tendencia",
+      "breakout with volume": "ruptura con volumen",
+      "defensive mean reversion": "rebote defensivo",
+      "no trade": "no operar",
+    };
+
+    const autoSelectedMatch = message.match(/^Auto Recommended selected this because the strongest fit is (.+)\.$/);
+
+    if (autoSelectedMatch) {
+      const strategyLabel = strategyLabelTranslations[autoSelectedMatch[1]] ?? autoSelectedMatch[1];
+
+      return `Auto recomendado eligió esto porque el mejor ajuste es ${strategyLabel}.`;
+    }
+
+    const selectedModeMatch = message.match(/^The selected (.+) mode matches the current market context\.$/);
+
+    if (selectedModeMatch) {
+      const strategyLabel = strategyLabelTranslations[selectedModeMatch[1]] ?? selectedModeMatch[1];
+
+      return `El modo ${strategyLabel} seleccionado encaja con el contexto actual de mercado.`;
+    }
+
+    const autoPrefersMatch = message.match(/^Auto mode prefers (.+), while the selected mode needs more confirmation\.$/);
+
+    if (autoPrefersMatch) {
+      const strategyLabel = strategyLabelTranslations[autoPrefersMatch[1]] ?? autoPrefersMatch[1];
+
+      return `El modo Auto prefiere ${strategyLabel}, mientras el modo seleccionado necesita más confirmación.`;
+    }
   }
 
   return t.messageTranslations[message as keyof typeof t.messageTranslations] ?? message;
@@ -297,6 +337,8 @@ export function PositionStrategyApp() {
   const [isExplanationLoading, setIsExplanationLoading] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const [scannerUniverse, setScannerUniverse] = useState<ScannerUniverse>("beginner");
+  const [scannerScope, setScannerScope] = useState<ScannerScope>("group");
+  const [scannerSpecificSymbol, setScannerSpecificSymbol] = useState("ETH");
   const [scannerIntent, setScannerIntent] = useState<PositionIntent>("analyze_entry");
   const [scannerTimeframe, setScannerTimeframe] = useState<StrategyTimeframe>("1d");
   const [scannerMaxTokens, setScannerMaxTokens] = useState<(typeof scannerMaxOptions)[number]>(10);
@@ -727,6 +769,14 @@ export function PositionStrategyApp() {
   }
 
   const scannerTokenCandidates = useMemo(() => {
+    if (scannerScope === "current") {
+      return [selectedToken];
+    }
+
+    if (scannerScope === "specific") {
+      return eligibleTokenUniverse.filter((token) => token.symbol === scannerSpecificSymbol);
+    }
+
     if (scannerUniverse === "beginner") {
       return beginnerTokenSet;
     }
@@ -736,7 +786,7 @@ export function PositionStrategyApp() {
     }
 
     return eligibleTokenUniverse;
-  }, [scannerUniverse]);
+  }, [scannerScope, scannerSpecificSymbol, scannerUniverse, selectedToken]);
 
   async function generateExplanation() {
     if (!exportPayload) {
@@ -1348,10 +1398,47 @@ export function PositionStrategyApp() {
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <label className="block">
+                <span className="text-sm font-medium text-slate-700">{t.scannerScope}</span>
+                <select
+                  value={scannerScope}
+                  onChange={(event) => setScannerScope(event.target.value as ScannerScope)}
+                  className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="current">{t.scannerScopeCurrent}</option>
+                  <option value="specific">{t.scannerScopeSpecific}</option>
+                  <option value="group">{t.scannerScopeGroup}</option>
+                </select>
+              </label>
+              {scannerScope === "specific" ? (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">{t.scannerSpecificToken}</span>
+                  <select
+                    value={scannerSpecificSymbol}
+                    onChange={(event) => setScannerSpecificSymbol(event.target.value)}
+                    className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                  >
+                    {eligibleTokenUniverse.map((token) => (
+                      <option key={token.id} value={token.symbol}>
+                        {token.symbol} - {token.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {scannerScope === "current" ? (
+                <div className="block">
+                  <span className="text-sm font-medium text-slate-700">{t.scannerCurrentToken}</span>
+                  <div className="mt-1 flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-950">
+                    {selectedToken.symbol} - {selectedToken.name}
+                  </div>
+                </div>
+              ) : null}
+              <label className="block">
                 <span className="text-sm font-medium text-slate-700">{t.scannerUniverse}</span>
                 <select
                   value={scannerUniverse}
                   onChange={(event) => setScannerUniverse(event.target.value as ScannerUniverse)}
+                  disabled={scannerScope !== "group"}
                   className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
                 >
                   <option value="beginner">{t.beginnerTokens}</option>
@@ -1392,6 +1479,7 @@ export function PositionStrategyApp() {
                 <select
                   value={scannerMaxTokens}
                   onChange={(event) => setScannerMaxTokens(Number(event.target.value) as (typeof scannerMaxOptions)[number])}
+                  disabled={scannerScope !== "group"}
                   className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
                 >
                   {scannerMaxOptions.map((option) => (
