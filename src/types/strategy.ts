@@ -390,6 +390,9 @@ export type StrategyExport = {
     lookbackPeriods: 200;
     requiredIndicators: ["ma20", "ma50", "ma200", "rsi14", "atr14", "support", "resistance"];
   };
+  symbol?: string;
+  entryPrice?: number;
+  positionSize?: number;
   totalCapital?: number;
   calculatedPositionSize?: number;
   positionIntent: PositionIntent;

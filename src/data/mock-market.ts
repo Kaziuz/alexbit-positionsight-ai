@@ -261,6 +261,7 @@ const scenarioSeeds: Record<string, MockSeed> = {
 };
 
 const defaultPrices: Record<string, number> = {
+  BNB: 610,
   XRP: 2.18,
   TRX: 0.28,
   ADA: 0.71,

@@ -92,3 +92,14 @@ If Playwright is available, use it for smoke tests.
 If Playwright is not installed, document source-level verification and HTTP smoke tests.
 Do not install new production dependencies without a clear reason.
 Testing dependencies are allowed when explicitly requested.
+
+## Validation workflow
+
+For controlled token validation passes, keep coverage lightweight and deterministic.
+Use Playwright smoke tests for token selection, intent selection, language switching, chart markers, risk badge visibility, simple backtest visibility, and JSON export shape.
+Do not fail validation only because CoinMarketCap historical OHLCV is unavailable on the active plan; require the UI/export to label estimated or fallback data honestly.
+Before handoff after meaningful validation changes, run:
+- npm run lint
+- npm run typecheck
+- npm run build
+- npm run test:e2e

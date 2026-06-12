@@ -238,6 +238,20 @@ The export preserves both human-readable strategy explanations and machine-reada
 - Validation metadata.
 - Human-readable and machine-readable strategy output.
 
+## Current MVP Status
+
+As of the Day 11 + Day 10 + Day 13 validation pass, the MVP supports:
+
+- Live CoinMarketCap latest quote retrieval through `/api/market`.
+- Estimated/fallback history when historical OHLCV is unavailable on the active CoinMarketCap plan.
+- Deterministic strategy engine decisions for `analyze_entry`, `manage_open_position`, and `exit_review`.
+- Simple deterministic backtest output with clear `historical_cmc`, `estimated_from_live_quote`, or `demo_dataset` provenance.
+- Exportable strategy skill JSON with strategy, market, history/indicator, backtest, execution-assumption, and validation metadata.
+- English and Spanish UI labels, warnings, badges, strategy explanation copy, and controls.
+- No live trading, no wallet connection, no transaction signing, no exchange execution, and no short selling.
+
+The requested validation matrix covers BNB, ETH, LINK, AVAX, CAKE, TWT, AAVE, UNI, ATOM, and FIL across all three position intents and both supported UI languages. Details are recorded in `docs/day-11-token-validation.md`.
+
 ## Security
 
 - Never commit `.env.local`.

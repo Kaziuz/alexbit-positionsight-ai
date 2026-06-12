@@ -10,10 +10,11 @@ import type { EligibleToken, TokenCategory } from "@/types/strategy";
  * - Trades outside this list do not count.
  * - Some symbols may be ambiguous, so future versions should map symbols
  *   to CoinMarketCap IDs when possible.
- * - BNB and BTCB are intentionally omitted from the app token universe until
- *   they are verified against the official hackathon list for this track.
+ * - BTCB is intentionally omitted from the app token universe until it is
+ *   verified against the official hackathon list for this track.
  */
 export const eligibleTokenSymbols = [
+  "BNB",
   "ETH",
   "USDT",
   "USDC",
@@ -165,7 +166,7 @@ export const eligibleTokenSymbols = [
 
 export type EligibleTokenSymbol = (typeof eligibleTokenSymbols)[number];
 
-const beginnerSymbols = new Set(["ETH", "AVAX", "LINK", "AAVE", "UNI", "ATOM", "CAKE", "TWT", "FET", "DOGE", "SHIB"]);
+const beginnerSymbols = new Set(["BNB", "ETH", "AVAX", "LINK", "AAVE", "UNI", "ATOM", "CAKE", "TWT", "FET", "DOGE", "SHIB"]);
 
 function token(id: number, symbol: string, name: string, category: TokenCategory, cmcId = id < 900000 ? id : undefined): EligibleToken {
   return {
@@ -180,6 +181,7 @@ function token(id: number, symbol: string, name: string, category: TokenCategory
 
 // Placeholder IDs use the 900000+ range until a verified CoinMarketCap ID is mapped.
 export const eligibleTokenUniverse: EligibleToken[] = [
+  token(1839, "BNB", "BNB", "Main Assets"),
   token(1027, "ETH", "Ethereum", "Main Assets"),
   token(52, "XRP", "XRP", "Main Assets"),
   token(1958, "TRX", "TRON", "Main Assets"),
