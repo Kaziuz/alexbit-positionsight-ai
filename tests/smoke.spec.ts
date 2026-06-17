@@ -142,7 +142,6 @@ function expectValidStrategyExport(
 
 async function selectAda(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Advanced", exact: true }).click();
   await page.locator("form select").selectOption("ADA");
   await expect(page.locator("pre")).toContainText('"asset": "ADA"');
 }
@@ -167,15 +166,18 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
   await expect(page.getByText("Ajuste de estrategia", { exact: true })).toBeVisible();
   await expect(page.getByText("Modo de tamaño", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Fecha local:/).first()).toBeVisible();
+  await expect(page.getByText("Detalle de estrategia", { exact: true })).toBeVisible();
   await expect(page.getByText("Prueba simple", { exact: true })).toBeVisible();
   await expect(page.getByText("Fuente de la prueba", { exact: true })).toBeVisible();
   await expect(page.getByText("Alcance del escaneo", { exact: true })).toBeVisible();
-  await expect(page.locator("header").getByText("Soporte", { exact: true })).toHaveCount(0);
-  await expect(page.locator("header").getByText("Resistencia", { exact: true })).toHaveCount(0);
+  await expect(page.locator("header").getByText("Soporte", { exact: true })).toBeVisible();
+  await expect(page.locator("header").getByText("Resistencia", { exact: true })).toBeVisible();
   await expect(page.getByText(/Soporte estimado|Soporte/).first()).toBeVisible();
   await expect(page.getByText(/Resistencia estimada|Resistencia/).first()).toBeVisible();
   await expect(page.getByText("This checks whether", { exact: false })).toHaveCount(0);
   expect(await getNonJsonBodyText(page)).not.toContain("Risk or market structure is unclear");
+  expect(await getNonJsonBodyText(page)).not.toMatch(/\b(?:Alcista|Bajista)\b/);
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
@@ -277,12 +279,11 @@ test("day 10, 11, and 13 validation matrix covers requested tokens, intents, lan
   const labels = {
     en: {
       languageButton: "English",
-      advanced: "Advanced",
       chartTitle: "Entry vs current price",
       riskBadge: "Risk badge",
       backtest: "Simple Backtest",
       export: "Backtest-ready JSON",
-      chartPathNote: /Chart path is estimated|Latest quote and historical candles/i,
+      chartPathNote: /Chart path is estimated|Latest quote and historical candles|Demo fallback data/i,
       chartMarkers: ["Stop", "Entry", "Current", "Trailing Exit"],
       intentLabels: {
         analyze_entry: "Analyze entry",
@@ -298,12 +299,11 @@ test("day 10, 11, and 13 validation matrix covers requested tokens, intents, lan
     },
     es: {
       languageButton: "Español",
-      advanced: "Avanzado",
       chartTitle: "Entrada vs precio actual",
       riskBadge: "Nivel de riesgo",
       backtest: "Prueba simple",
       export: "JSON listo para pruebas",
-      chartPathNote: /recorrido del gráfico|velas históricas/i,
+      chartPathNote: /recorrido del gráfico|velas históricas|datos demo/i,
       chartMarkers: ["Stop", "Entrada", "Actual", "Salida dinámica"],
       intentLabels: {
         analyze_entry: "Analizar entrada",
@@ -323,8 +323,6 @@ test("day 10, 11, and 13 validation matrix covers requested tokens, intents, lan
 
   for (const language of ["en", "es"] as const) {
     await page.getByRole("button", { name: labels[language].languageButton, exact: true }).click();
-    await expect(page.getByRole("button", { name: labels[language].advanced, exact: true })).toBeVisible();
-    await page.getByRole("button", { name: labels[language].advanced, exact: true }).click();
     await expect(page.locator("body")).not.toContainText(labels[language].absentText);
 
     for (const symbol of tokens) {
@@ -424,6 +422,9 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.getByText("Backtest source", { exact: true })).toBeVisible();
   await expect(page.getByText("Candles used", { exact: true })).toBeVisible();
   await expect(page.getByText("Result", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Local date:/).first()).toBeVisible();
+  await expect(page.getByText("Strategy details", { exact: true })).toBeVisible();
+  expect(await getNonJsonBodyText(page)).not.toMatch(/\b(?:Bullish|Bearish)\b/);
   await expect(page.getByText(/Historical CMC|Estimated from live quote|Demo dataset/).first()).toBeVisible();
   await expect(page.getByText("Add exposure allowed", { exact: true })).toBeVisible();
   await expect(page.getByText("Reduce/exit recommended", { exact: true })).toBeVisible();
@@ -468,8 +469,12 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.locator("pre")).toContainText('"sellReviewMeaning"');
   await expect(page.locator("pre")).toContainText('"backtestSpec"');
 
-  await page.locator('input[type="range"]').fill("2");
+  const riskSlider = page.locator('input[type="range"]');
+  await expect(riskSlider).toHaveAttribute("max", "10");
+  await riskSlider.fill("2");
   await expect(page.getByText("Risk above 1% is aggressive", { exact: false })).toBeVisible();
+  await riskSlider.fill("10");
+  await expect(page.locator("pre")).toContainText('"maxRiskPercentage": 10');
 
   await page.getByRole("button", { name: "15m", exact: true }).click();
   await expect(page.getByText("Intraday trading is more speculative", { exact: false })).toBeVisible();
@@ -490,8 +495,8 @@ test("risk-first sizing, warnings, chart labels, and export stay coherent", asyn
   await expect(page.getByText("RSI 14", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("ATR 14", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Avg Volume", { exact: true }).first()).toBeVisible();
-  await expect(page.locator("header").getByText("Support", { exact: true })).toHaveCount(0);
-  await expect(page.locator("header").getByText("Resistance", { exact: true })).toHaveCount(0);
+  await expect(page.locator("header").getByText("Support", { exact: true })).toBeVisible();
+  await expect(page.locator("header").getByText("Resistance", { exact: true })).toBeVisible();
   const chartSection = page.locator("section").filter({ hasText: "Entry vs current price" }).first();
   await expect(chartSection.getByText(/Estimated Support|Support/).first()).toBeVisible();
   await expect(chartSection.getByText(/Estimated Resistance|Resistance/).first()).toBeVisible();
@@ -571,7 +576,7 @@ test("day 7 and day 8 targeted ADA QA scenarios", async ({ page }) => {
   expect(payload.positionIntent).toBe("analyze_entry");
   expect(payload.riskBadge).toBe("no_trade");
   expect(payload.strategyDecision?.finalRiskVerdict).toBe("no_trade_recommended");
-  await expect(page.getByText("Entry price is very far from current price", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText(/Current price is too far from entry|Entry price is very far from current price/).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Manage open position", exact: true }).click();
   await page.locator('input[type="text"]').nth(2).fill("25");
@@ -639,6 +644,10 @@ test("token scanner runs deterministic scan and can load a result", async ({ pag
 
   await expect(page.getByText("Token Scanner", { exact: true })).toBeVisible();
   await expect(page.getByText("Possible movement to review", { exact: true })).toHaveCount(0);
+  const maxTokensSelect = page.getByLabel("Max tokens to scan");
+  for (const option of ["30", "40", "50"]) {
+    await expect(maxTokensSelect.locator(`option[value="${option}"]`)).toHaveCount(1);
+  }
 
   await page.getByRole("button", { name: "Scan tokens", exact: true }).click();
   await expect(page.getByText("Possible movement to review", { exact: true }).first()).toBeVisible();
@@ -647,7 +656,13 @@ test("token scanner runs deterministic scan and can load a result", async ({ pag
   await expect.poll(async () => scannerCards.count()).toBeGreaterThanOrEqual(3);
   await expect(page.getByText("Risk badge", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Intent action", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/Historical CMC|Estimated candles|History unavailable/).first()).toBeVisible();
+  const firstScannerCard = page
+    .getByText("Possible movement to review", { exact: true })
+    .first()
+    .locator("xpath=ancestor::div[contains(@class, 'bg-panel')][1]");
+  await expect(firstScannerCard.getByText("Quote source", { exact: true })).toHaveCount(0);
+  await expect(firstScannerCard.getByText("History", { exact: true })).toHaveCount(0);
+  await expect(firstScannerCard.getByText("Backtest source", { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Load in main analysis", exact: true }).first().click();
 

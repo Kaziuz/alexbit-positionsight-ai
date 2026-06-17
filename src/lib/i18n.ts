@@ -28,6 +28,7 @@ export const translations = {
     strategyTimeframe: "Strategy Timeframe",
     strategyMode: "Strategy mode",
     maxRiskPercentage: "Max risk percentage",
+    localDate: "Local date",
     currentPrice: "Current price",
     move24h: "24h move",
     volume24h: "Volume 24h",
@@ -166,7 +167,9 @@ export const translations = {
       unavailable: "Unavailable",
     },
     demoRange: "Demo range",
+    demoRangeSeparator: "to",
     perStrategy: "per strategy.",
+    strategyDetails: "Strategy details",
     strategyPrinciples:
       "These modes follow patient, risk-first principles: avoid overtrading, wait for confirmation, define invalidation, and avoid unclear setups.",
     whatIsThis: "What is this?",
@@ -186,7 +189,7 @@ export const translations = {
     intradayTradingWarning:
       "Intraday trading is more speculative and often dominated by noise. PositionSight recommends validating this setup on the daily timeframe before acting.",
     riskAboveOneWarning:
-      "Risk above 1% is aggressive for this risk-first model. Consider reducing risk before entering.",
+      "Risk above 1% is aggressive; consider reducing risk before entering.",
     atrFallbackWarning: "ATR is unavailable, so PositionSight is using the percent-based stop fallback.",
     positionSizeEstimatedWarning: "Position size uses estimated ATR until historical OHLCV is available.",
     positionSizeFallbackWarning: "Stop distance was invalid, so PositionSight used the percent-based fallback.",
@@ -351,6 +354,11 @@ export const translations = {
       bullish: "Bullish",
       neutral: "Neutral",
       bearish: "Bearish",
+    },
+    trendIconLabels: {
+      bullish: "Bullish trend",
+      neutral: "Neutral trend",
+      bearish: "Bearish trend",
     },
     sentimentLabels: {
       bullish: "Bullish",
@@ -519,7 +527,7 @@ export const translations = {
     tooltips: {
       tokenList: "Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
       eligibleToken:
-        "Choose the crypto asset you want to analyze. Beginner mode shows a shorter list; Advanced mode shows more hackathon-supported tokens.",
+        "Choose the eligible crypto asset you want to analyze.",
       positionIntent:
         "Choose whether you want to analyze a possible entry, manage an existing position, or review exit and reduction conditions.",
       entryPrice: "The price where you bought, or the price where you are considering entering.",
@@ -615,6 +623,7 @@ export const translations = {
     strategyTimeframe: "Temporalidad de estrategia",
     strategyMode: "Modo de estrategia",
     maxRiskPercentage: "Porcentaje máximo de riesgo",
+    localDate: "Fecha local",
     currentPrice: "Precio actual",
     move24h: "Movimiento 24h",
     volume24h: "Volumen 24h",
@@ -753,7 +762,9 @@ export const translations = {
       unavailable: "No disponible",
     },
     demoRange: "Rango demo",
+    demoRangeSeparator: "y",
     perStrategy: "por estrategia.",
+    strategyDetails: "Detalle de estrategia",
     strategyPrinciples:
       "Estos modos siguen principios pacientes y centrados en riesgo: evitar operar de más, esperar confirmación, definir invalidación y evitar configuraciones poco claras.",
     whatIsThis: "¿Qué es esto?",
@@ -773,7 +784,7 @@ export const translations = {
     intradayTradingWarning:
       "Las temporalidades intradía son más especulativas y suelen estar dominadas por ruido técnico. PositionSight recomienda validar esta configuración en temporalidad diaria antes de actuar.",
     riskAboveOneWarning:
-      "Un riesgo superior al 1% es agresivo para este modelo centrado en protección de capital. Considera reducir el riesgo antes de entrar.",
+      "Un riesgo superior al 1% es agresivo, considera reducir el riesgo antes de entrar",
     atrFallbackWarning: "ATR no está disponible, así que PositionSight usa el respaldo de stop por porcentaje.",
     positionSizeEstimatedWarning: "El tamaño de posición usa ATR estimado hasta que OHLCV histórico esté disponible.",
     positionSizeFallbackWarning: "La distancia al stop no era válida, así que PositionSight usó el respaldo por porcentaje.",
@@ -938,6 +949,11 @@ export const translations = {
       bullish: "Alcista",
       neutral: "Neutral",
       bearish: "Bajista",
+    },
+    trendIconLabels: {
+      bullish: "Tendencia alcista",
+      neutral: "Tendencia neutral",
+      bearish: "Tendencia bajista",
     },
     sentimentLabels: {
       bullish: "Alcista",
@@ -1140,7 +1156,7 @@ export const translations = {
     tooltips: {
       tokenList: "Modo Principiante muestra una lista más corta; Avanzado muestra más tokens soportados por el hackathon.",
       eligibleToken:
-        "Elige el criptoactivo que quieres analizar. Principiante muestra una lista corta; Avanzado muestra más tokens soportados por el hackathon.",
+        "Elige el criptoactivo elegible que quieres analizar.",
       positionIntent:
         "Elige si quieres analizar una posible entrada, gestionar una posición existente o revisar condiciones de salida y reducción.",
       entryPrice: "El precio donde compraste, o el precio donde estás considerando entrar.",

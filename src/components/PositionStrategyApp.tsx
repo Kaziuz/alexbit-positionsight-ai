@@ -11,7 +11,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { beginnerTokenSet, eligibleTokenUniverse, eligibleTokensByCategory } from "@/data/eligible-tokens";
+import { beginnerTokenSet, eligibleTokenUniverse } from "@/data/eligible-tokens";
 import { runSimpleBacktest } from "@/lib/backtest";
 import { formatCompact, formatCurrency, formatPercentage } from "@/lib/format";
 import { languageLabels, translations, type Language } from "@/lib/i18n";
@@ -35,20 +35,19 @@ import type {
   StrategyDecision,
   StrategyMode,
   StrategyTimeframe,
-  TokenCategory,
 } from "@/types/strategy";
 import { MetricTile } from "./MetricTile";
 import { PricePositionChart } from "./PricePositionChart";
 
 const minRiskPercentage = 0.5;
-const maxRiskPercentage = 6;
+const maxRiskPercentage = 10;
 const recommendedRiskPercentage = 1;
 const defaultTotalCapital = 1000;
 const atrStopMultiple = 1.75;
 
 const strategyModes: StrategyMode[] = ["auto", "trend_confirmation", "breakout_retest", "defensive_rebound", "risk_check"];
 const positionIntents: PositionIntent[] = ["analyze_entry", "manage_open_position", "exit_review"];
-const scannerMaxOptions = [5, 10, 20] as const;
+const scannerMaxOptions = [5, 10, 20, 30, 40, 50] as const;
 
 const initialPosition: PositionInput = {
   symbol: "AVAX",
@@ -115,6 +114,7 @@ function getRiskBadgeTone(badge: RiskBadge) {
   return "negative";
 }
 
+type TrendIconState = "bullish" | "bearish" | "neutral" | "mixed" | "unavailable";
 type TranslationSet = (typeof translations)[Language];
 type ScannerUniverse = "beginner" | "advanced" | "all";
 type ScannerScope = "current" | "specific" | "group";
@@ -171,6 +171,45 @@ function translateMessage(message: string | undefined, t: TranslationSet) {
   }
 
   return t.messageTranslations[message as keyof typeof t.messageTranslations] ?? message;
+}
+
+function getTrendIconLabel(state: TrendIconState, t: TranslationSet) {
+  if (state === "bullish") {
+    return t.trendIconLabels.bullish;
+  }
+
+  if (state === "bearish") {
+    return t.trendIconLabels.bearish;
+  }
+
+  return t.trendIconLabels.neutral;
+}
+
+function TrendIcon({ state, t }: { state: TrendIconState; t: TranslationSet }) {
+  const label = getTrendIconLabel(state, t);
+  const isBullish = state === "bullish";
+  const isBearish = state === "bearish";
+  const colorClass = isBullish ? "text-positive" : isBearish ? "text-negative" : "text-slate-500";
+  const points = isBullish ? "3,15 8,10 12,12 21,3" : isBearish ? "3,5 8,10 12,8 21,17" : "3,10 21,10";
+
+  return (
+    <span
+      aria-label={label}
+      role="img"
+      title={label}
+      className={`inline-flex h-8 w-10 items-center justify-center rounded-md border border-slate-200 bg-white ${colorClass}`}
+    >
+      <svg aria-hidden="true" className="h-5 w-6" viewBox="0 0 24 20" fill="none">
+        <polyline points={points} stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        {isBullish ? (
+          <polyline points="16,3 21,3 21,8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        ) : null}
+        {isBearish ? (
+          <polyline points="16,17 21,17 21,12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        ) : null}
+      </svg>
+    </span>
+  );
 }
 
 function getLocalizedDecisionText(decision: StrategyDecision, t: TranslationSet) {
@@ -325,8 +364,8 @@ export function PositionStrategyApp() {
   const [entryPriceInput, setEntryPriceInput] = useState(String(initialPosition.entryPrice));
   const [totalCapitalInput, setTotalCapitalInput] = useState(String(initialPosition.totalCapital));
   const [existingPositionSizeInput, setExistingPositionSizeInput] = useState("2");
-  const [tokenMode, setTokenMode] = useState<"beginner" | "advanced">("beginner");
   const [language, setLanguage] = useState<Language>("en");
+  const [localDateLabel, setLocalDateLabel] = useState("");
   const [expandedStrategyMode, setExpandedStrategyMode] = useState<StrategyMode | null>("auto");
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
   const [historyResponse, setHistoryResponse] = useState<HistoryResponse | null>(null);
@@ -347,7 +386,6 @@ export function PositionStrategyApp() {
   const [scannerError, setScannerError] = useState<string | null>(null);
   const t = translations[language];
 
-  const availableTokens = tokenMode === "beginner" ? beginnerTokenSet : eligibleTokenUniverse;
   const selectedToken =
     eligibleTokenUniverse.find((token) => token.symbol === position.symbol) ?? eligibleTokenUniverse[0];
   const analysisContext = useMemo<MarketContext | null>(() => {
@@ -355,8 +393,17 @@ export function PositionStrategyApp() {
       return null;
     }
 
-    return mergeHistoryIntoMarketContext(marketContext, historyResponse);
-  }, [historyResponse, marketContext]);
+    if (marketContext.symbol !== position.symbol) {
+      return null;
+    }
+
+    const activeHistory =
+      historyResponse?.symbol === marketContext.symbol && historyResponse.timeframe === position.strategyTimeframe
+        ? historyResponse
+        : null;
+
+    return mergeHistoryIntoMarketContext(marketContext, activeHistory);
+  }, [historyResponse, marketContext, position.strategyTimeframe, position.symbol]);
   const quote = analysisContext ? getQuoteFromContext(analysisContext) : null;
   const parsedEntryPrice = useMemo(() => parseLocalizedNumberInput(entryPriceInput), [entryPriceInput]);
   const parsedTotalCapital = useMemo(() => parseLocalizedNumberInput(totalCapitalInput), [totalCapitalInput]);
@@ -501,41 +548,18 @@ export function PositionStrategyApp() {
     totalCapitalInput,
   ]);
   const isPositionValid = validationMessages.length === 0;
-  const entryDistanceWarning =
-    quote && normalizedPosition
-      ? Math.abs((quote.price - normalizedPosition.entryPrice) / normalizedPosition.entryPrice) > 0.5
-      : false;
-  const stopBreachWarning =
-    quote && !isEntryIntent && positionSizing.stopLoss > 0 && quote.price <= positionSizing.stopLoss
-      ? t.stopBreachWarning
-      : null;
-  const genericSourceNotes = new Set<string>([
-    String(t.latestLiveHistoryEstimated),
-    String(translateMessage(
-      "Latest quote is live from CoinMarketCap. Chart path and indicators are estimated until historical OHLCV is available on the current plan.",
-      t,
-    )),
-  ]);
-  const warningMessages = [
-    ...(entryDistanceWarning
-      ? [t.entryDistanceWarning]
-      : []),
-    ...(stopBreachWarning ? [stopBreachWarning] : []),
-    ...(getTimeframeCategory(position.strategyTimeframe) === "intraday" ? [t.intradayTradingWarning] : []),
-    ...(position.maxRiskPercentage > recommendedRiskPercentage ? [t.riskAboveOneWarning] : []),
-    ...positionSizing.warnings,
-    ...(analysisContext?.warnings ?? []).map((warning) => translateMessage(warning, t)),
-    ...(historyResponse?.warnings ?? []).map((warning) => translateMessage(warning, t)),
-  ].filter((warning) => !genericSourceNotes.has(String(warning)));
-  const dataNoteMainText =
-    historyResponse?.source === "coinmarketcap" ? t.latestAndHistoryFromCmc : t.latestLiveHistoryEstimated;
-  const dataNoteMainTextValue = String(dataNoteMainText);
-  const dataNoteWarnings = [...(analysisContext?.warnings ?? []), ...(historyResponse?.warnings ?? [])]
-    .map((warning) => String(translateMessage(warning, t)))
-    .filter(
-      (warning, index, warnings) =>
-        warning !== dataNoteMainTextValue && !genericSourceNotes.has(warning) && warnings.indexOf(warning) === index,
+  const isIntradayTimeframe = getTimeframeCategory(position.strategyTimeframe) === "intraday";
+  const isRiskAboveRecommended = position.maxRiskPercentage > recommendedRiskPercentage;
+
+  useEffect(() => {
+    setLocalDateLabel(
+      new Intl.DateTimeFormat(language === "es" ? "es-ES" : "en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(new Date()),
     );
+  }, [language]);
 
   useEffect(() => {
     let isActive = true;
@@ -543,6 +567,7 @@ export function PositionStrategyApp() {
     async function fetchContext() {
       setIsLoadingContext(true);
       setContextError(null);
+      setMarketContext(null);
 
       try {
         const response = await fetch(`/api/market?symbol=${position.symbol}`, {
@@ -582,6 +607,7 @@ export function PositionStrategyApp() {
 
     async function fetchHistory() {
       setIsLoadingHistory(true);
+      setHistoryResponse(null);
 
       try {
         const response = await fetch(
@@ -705,7 +731,7 @@ export function PositionStrategyApp() {
   const headerMarketMetrics =
     analysisContext
       ? [
-          { label: t.trend, value: t.trendStateLabels[analysisContext.technicals.trendState] },
+          { label: t.trend, value: <TrendIcon state={analysisContext.technicals.trendState} t={t} /> },
           {
             label: "RSI 14",
             value: historyResponse?.indicators.rsi14 === null ? t.notEnoughHistory : analysisContext.technicals.rsi14.toFixed(0),
@@ -745,6 +771,20 @@ export function PositionStrategyApp() {
                 ? t.notEnoughHistory
                 : formatCompact(analysisContext.technicals.averageVolume ?? analysisContext.quote.volume24h),
           },
+          {
+            label: t.support,
+            value:
+              historyResponse?.indicators.support === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.support, pricePrecision),
+          },
+          {
+            label: t.resistance,
+            value:
+              historyResponse?.indicators.resistance === null
+                ? t.notEnoughHistory
+                : formatCurrency(analysisContext.technicals.resistance, pricePrecision),
+          },
         ]
       : [];
   const entryPriceLabel = t.intentEntryPriceLabels[position.positionIntent];
@@ -759,14 +799,6 @@ export function PositionStrategyApp() {
     normalizedPosition && positionSizing.stopDistance > 0
       ? Math.abs(positionSizing.stopDistance * normalizedPosition.positionSize)
       : 0;
-
-  function updateTokenMode(nextMode: "beginner" | "advanced") {
-    setTokenMode(nextMode);
-
-    if (nextMode === "beginner" && !beginnerTokenSet.some((token) => token.symbol === position.symbol)) {
-      setPosition((current) => ({ ...current, symbol: "AVAX" }));
-    }
-  }
 
   const scannerTokenCandidates = useMemo(() => {
     if (scannerScope === "current") {
@@ -982,11 +1014,11 @@ export function PositionStrategyApp() {
           </div>
         </div>
         {headerMarketMetrics.length ? (
-          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-7">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9">
             {headerMarketMetrics.map((metric) => (
               <div key={metric.label} className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{metric.label}</div>
-                <div className="mt-0.5 truncate text-sm font-semibold text-slate-950">{metric.value}</div>
+                <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">{metric.label}</div>
+                <div className="mt-0.5 min-h-5 break-words text-sm font-semibold leading-tight text-slate-950">{metric.value}</div>
               </div>
             ))}
           </div>
@@ -1001,27 +1033,6 @@ export function PositionStrategyApp() {
           </div>
 
           <div className="mt-5 space-y-5">
-            <div>
-              <LabelWithInfo
-                label={t.tokenList}
-                tooltip={t.tooltips.tokenList}
-              />
-              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
-                  {(["beginner", "advanced"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => updateTokenMode(mode)}
-                    className={`h-9 rounded-md text-sm font-semibold transition ${
-                      tokenMode === mode ? "bg-white text-sky-800 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    {mode === "beginner" ? t.beginner : t.advanced}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <label className="block">
               <LabelWithInfo
                 label={t.eligibleToken}
@@ -1037,25 +1048,44 @@ export function PositionStrategyApp() {
                 }
                 className="mt-1 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
               >
-                {tokenMode === "beginner"
-                  ? availableTokens.map((token) => (
-                      <option key={token.id} value={token.symbol}>
-                        {token.symbol} - {token.name}
-                      </option>
-                    ))
-                  : Object.entries(eligibleTokensByCategory).map(([category, tokens]) => (
-                      <optgroup
-                        key={category}
-                        label={t.tokenCategoryLabels[category as TokenCategory]}
-                      >
-                        {tokens.map((token) => (
-                          <option key={token.id} value={token.symbol}>
-                            {token.symbol} - {token.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
+                {eligibleTokenUniverse.map((token) => (
+                  <option key={token.id} value={token.symbol}>
+                    {token.symbol} - {token.name}
+                  </option>
+                ))}
               </select>
+            </label>
+
+            <label className="block rounded-md border border-slate-200 bg-slate-50 p-3">
+              <span className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <span>{t.maxRiskPercentage}</span>
+                  <InfoTooltip text={t.tooltips.maxRiskPercentage} />
+                </span>
+                <span className="shrink-0 font-semibold text-slate-950">{position.maxRiskPercentage}%</span>
+              </span>
+              <input
+                type="range"
+                min={minRiskPercentage}
+                max={maxRiskPercentage}
+                step="0.5"
+                value={position.maxRiskPercentage}
+                onChange={(event) =>
+                  setPosition((current) => ({
+                    ...current,
+                    maxRiskPercentage: clampRiskPercentage(Number(event.target.value)),
+                  }))
+                }
+                className="mt-3 w-full accent-sky-700"
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                {t.demoRange}: {minRiskPercentage}% {t.demoRangeSeparator} {maxRiskPercentage}% {t.perStrategy}
+              </span>
+              {isRiskAboveRecommended ? (
+                <span className="mt-2 block rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-900">
+                  {t.riskAboveOneWarning}
+                </span>
+              ) : null}
             </label>
 
             <div>
@@ -1164,6 +1194,11 @@ export function PositionStrategyApp() {
                   </button>
                 ))}
               </div>
+              {isIntradayTimeframe ? (
+                <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                  {t.intradayTradingWarning}
+                </div>
+              ) : null}
             </div>
 
             <div>
@@ -1225,32 +1260,168 @@ export function PositionStrategyApp() {
               </div>
             </div>
 
-            <label className="block">
-              <span className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
-                <span className="inline-flex items-center gap-1.5">
-                  <span>{t.maxRiskPercentage}</span>
-                  <InfoTooltip text={t.tooltips.maxRiskPercentage} />
-                </span>
-                <span className="font-semibold text-slate-950">{position.maxRiskPercentage}%</span>
-              </span>
-              <input
-                type="range"
-                min={minRiskPercentage}
-                max={maxRiskPercentage}
-                step="0.5"
-                value={position.maxRiskPercentage}
-                onChange={(event) =>
-                  setPosition((current) => ({
-                    ...current,
-                    maxRiskPercentage: clampRiskPercentage(Number(event.target.value)),
-                  }))
-                }
-                className="mt-3 w-full accent-sky-700"
-              />
-              <span className="mt-1 block text-xs text-slate-500">
-                {t.demoRange}: {minRiskPercentage}% {t.and} {maxRiskPercentage}% {t.perStrategy}
-              </span>
-            </label>
+            {strategyDecision && strategy && quote ? (
+              <div className="rounded-md border border-slate-200 bg-panel p-4">
+                <div className="text-base font-semibold text-slate-950">{t.strategyDetails}</div>
+
+                <div className="mt-3 rounded-md border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">
+                  <div className="font-semibold text-slate-950">{t.whyThisStrategy}</div>
+                  <p className="mt-1">{t.intentPanelExplanations[strategyDecision.positionIntent]}</p>
+                  <p className="mt-2">{decisionText?.whyThisStrategy}</p>
+                  <p className="mt-3">
+                    <span className="font-semibold text-slate-950">{t.suggestedAction}</span>{" "}
+                    {t.intentSuggestedActionLabels[strategyDecision.intentAction]}
+                  </p>
+                  <p className="mt-3">
+                    <span className="font-semibold text-slate-950">
+                      {strategyDecision.positionIntent === "analyze_entry" ? t.entryCondition : t.decisionCondition}
+                    </span>{" "}
+                    {translateMessage(strategyDecision.decisionCondition, t) || strategy.entryCondition}
+                  </p>
+                  <p className="mt-3">
+                    <span className="font-semibold text-slate-950">{t.nextConfirmation}</span>{" "}
+                    {decisionText?.nextConfirmation}
+                  </p>
+                  <p className="mt-3">
+                    <span className="font-semibold text-slate-950">{t.beginnerNote}</span>{" "}
+                    {decisionText?.beginnerExplanation}
+                  </p>
+                </div>
+
+                {strategyDecision.noTradeReason ? (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <div className="font-semibold">{t.noTradeReason}</div>
+                        <div>{translateMessage(strategyDecision.noTradeReason, t)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {strategyDecision.warnings.length > 0 ? (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                    <div className="font-semibold">{t.warnings}</div>
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                      {strategyDecision.warnings.map((warning) => (
+                        <li key={warning}>{translateMessage(warning, t)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-slate-950">{t.strategyExplanation}</div>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">{t.aiExplanationNote}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={generateExplanation}
+                      disabled={isExplanationLoading || !exportPayload}
+                      className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isExplanationLoading ? t.generatingExplanation : t.generateExplanation}
+                    </button>
+                  </div>
+
+                  {explanationError ? (
+                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      {explanationError}
+                    </div>
+                  ) : null}
+
+                  {aiExplanationResponse ? (
+                    <div className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
+                      <div className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                        {aiExplanationResponse.source === "provider" ? t.providerConfigured : t.localDeterministicExplanation}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.simpleExplanation}</div>
+                        <p className="mt-1">{aiExplanationResponse.explanation.summary}</p>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.whatTheSystemSaw}</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {aiExplanationResponse.explanation.whatTheSystemSaw.map((item) => (
+                            <li key={item}>{translateMessage(item, t)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.whyThisDecision}</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {aiExplanationResponse.explanation.whyThisDecision.map((item) => (
+                            <li key={item}>{translateMessage(item, t)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.riskExplanation}</div>
+                        <p className="mt-1">{translateMessage(aiExplanationResponse.explanation.riskExplanation, t)}</p>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.whatToWatchNext}</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {aiExplanationResponse.explanation.whatToWatchNext.map((item) => (
+                            <li key={item}>{translateMessage(item, t)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-slate-950">{t.limitations}</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {aiExplanationResponse.explanation.limitations.map((item) => (
+                            <li key={item}>{translateMessage(item, t)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
+                        {aiExplanationResponse.explanation.notFinancialAdvice}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <MetricTile label={t.stopLoss} value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />
+                  <MetricTile label={t.trailingExit} value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
+                </div>
+
+                {backtestResult ? (
+                  <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-base font-semibold text-slate-950">{t.simpleBacktest}</div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {t.backtestSourceLabels[backtestResult.backtestSource]}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <MetricTile label={t.backtestSource} value={t.backtestSourceLabels[backtestResult.backtestSource]} />
+                      <MetricTile label={t.candlesUsed} value={String(backtestResult.candlesUsed)} />
+                      <MetricTile label={t.entryTriggered} value={backtestResult.entryTriggered ? t.yes : t.no} />
+                      <MetricTile label={t.stopHit} value={backtestResult.stopHit ? t.yes : t.no} tone={backtestResult.stopHit ? "negative" : "positive"} />
+                      <MetricTile label={t.trailingExitHit} value={backtestResult.trailingExitHit ? t.yes : t.no} tone={backtestResult.trailingExitHit ? "positive" : "default"} />
+                      <MetricTile label={t.backtestResult} value={t.winLossLabels[backtestResult.winLossResult]} tone={backtestResult.winLossResult === "win" ? "positive" : backtestResult.winLossResult === "loss" ? "negative" : "warning"} />
+                      <MetricTile label={t.returnPercentage} value={formatPercentage(backtestResult.grossReturnPercentage)} tone={backtestResult.grossReturnPercentage >= 0 ? "positive" : "negative"} />
+                      <MetricTile label={t.estimatedPnl} value={formatCurrency(backtestResult.estimatedPnL)} tone={backtestResult.estimatedPnL >= 0 ? "positive" : "negative"} />
+                      <MetricTile label={t.maxDrawdown} value={formatPercentage(backtestResult.maxDrawdownPercentage)} tone={backtestResult.maxDrawdownPercentage < 0 ? "negative" : "default"} />
+                    </div>
+                    <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                      <div className="font-semibold text-slate-950">{t.limitations}</div>
+                      <ul className="mt-1 list-disc space-y-1 pl-4">
+                        {backtestResult.limitations.map((limitation) => (
+                          <li key={limitation}>{translateMessage(limitation, t)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
           </div>
 
           {validationMessages.length > 0 ? (
@@ -1269,28 +1440,6 @@ export function PositionStrategyApp() {
             </div>
           ) : null}
 
-          {warningMessages.length > 0 ? (
-            <div className="mt-5 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <div className="font-semibold">{t.positionWarning}</div>
-                  <ul className="mt-1 list-disc space-y-1 pl-4">
-                    {warningMessages.map((message, index) => (
-                      <li key={`${message}-${index}`}>{message}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-5 rounded-md border border-slate-200 bg-panel p-4 text-sm text-slate-600">
-            <div className="font-semibold text-slate-900">{selectedToken.name}</div>
-            <div className="mt-1">
-              {t.tokenCategory}: {t.tokenCategoryLabels[selectedToken.category]}. {t.tokenCategoryNote}
-            </div>
-          </div>
         </form>
 
         <div className="space-y-6">
@@ -1300,8 +1449,13 @@ export function PositionStrategyApp() {
                 <BarChart3 className="h-5 w-5 text-positive" />
                 {t.entryVsCurrentPrice}
               </div>
-              <div className="text-sm text-slate-500">
-                {isLoadingContext ? t.loadingMarketContext : contextError ?? t.marketContextReady}
+              <div className="text-sm text-slate-500 sm:text-right">
+                <div>{isLoadingContext ? t.loadingMarketContext : contextError ?? t.marketContextReady}</div>
+                {localDateLabel ? (
+                  <div className="mt-0.5 text-xs font-medium text-slate-500">
+                    {t.localDate}: {localDateLabel}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1358,21 +1512,15 @@ export function PositionStrategyApp() {
                 />
                 <MetricTile
                   label={t.sentiment}
-                  value={`${t.sentimentLabels[analysisContext.sentiment.label]} (${analysisContext.sentiment.score})`}
+                  value={
+                    <span className="inline-flex items-center gap-2">
+                      <TrendIcon state={analysisContext.sentiment.label} t={t} />
+                      <span>({analysisContext.sentiment.score})</span>
+                    </span>
+                  }
                 />
                 <MetricTile label={t.liquidity} value={`${analysisContext.orderBook.liquidityScore}/100`} />
                 <MetricTile label={t.derivatives} value={t.derivativesLabels[analysisContext.derivatives.longShortBias]} />
-              </div>
-              <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-                <div className="font-semibold">{t.dataNote}</div>
-                <p className="mt-1">{dataNoteMainText}</p>
-                {dataNoteWarnings.length ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-4">
-                    {dataNoteWarnings.map((warning, index) => (
-                      <li key={`${warning}-${index}`}>{warning}</li>
-                    ))}
-                  </ul>
-                ) : null}
               </div>
             </section>
           ) : null}
@@ -1526,9 +1674,9 @@ export function PositionStrategyApp() {
                         value={formatPercentage(result.percentChange24h)}
                         tone={result.percentChange24h < 0 ? "negative" : "positive"}
                       />
-                      <MetricTile label={t.trend} value={t.trendStateLabels[result.trendState]} />
+                      <MetricTile label={t.trend} value={<TrendIcon state={result.trendState} t={t} />} />
                       <MetricTile label="RSI 14" value={result.rsi14 === null ? t.notEnoughHistory : result.rsi14.toFixed(0)} />
-                      <MetricTile label={t.maAlignment} value={t.maAlignmentLabels[result.maAlignment]} />
+                      <MetricTile label={t.maAlignment} value={<TrendIcon state={result.maAlignment} t={t} />} />
                       <MetricTile
                         label={t.riskBadge}
                         value={t.riskBadgeLabels[result.riskBadge]}
@@ -1540,24 +1688,6 @@ export function PositionStrategyApp() {
                         value={t.stopStatusLabels[result.stopStatus]}
                         tone={result.stopStatus === "stop_breached" ? "negative" : result.stopStatus === "near_stop" ? "warning" : "positive"}
                       />
-                    </div>
-                    <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 sm:grid-cols-3">
-                      <div>
-                        <span className="font-semibold text-slate-900">{t.quoteSource}:</span>{" "}
-                        {result.dataSource.quote === "coinmarketcap" ? t.coinMarketCapLiveQuote : t.mockDataFallback}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">{t.historySourceShort}:</span>{" "}
-                        {result.dataSource.history === "coinmarketcap"
-                          ? t.coinMarketCapHistoricalShort
-                          : result.dataSource.history === "estimated"
-                            ? t.estimatedCandlesShort
-                            : t.unavailableHistory}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-900">{t.backtestSource}:</span>{" "}
-                        {t.backtestSourceLabels[result.dataSource.backtest]}
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -1633,165 +1763,6 @@ export function PositionStrategyApp() {
                   />
                 </div>
 
-                <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
-                  <div className="font-semibold text-slate-950">{t.whyThisStrategy}</div>
-                  <p className="mt-1">{t.intentPanelExplanations[strategyDecision.positionIntent]}</p>
-                  <p className="mt-2">{decisionText?.whyThisStrategy}</p>
-                  <p className="mt-3">
-                    <span className="font-semibold text-slate-950">{t.suggestedAction}</span>{" "}
-                    {t.intentSuggestedActionLabels[strategyDecision.intentAction]}
-                  </p>
-                  <p className="mt-3">
-                    <span className="font-semibold text-slate-950">
-                      {strategyDecision.positionIntent === "analyze_entry" ? t.entryCondition : t.decisionCondition}
-                    </span>{" "}
-                    {translateMessage(strategyDecision.decisionCondition, t) || strategy.entryCondition}
-                  </p>
-                  <p className="mt-3">
-                    <span className="font-semibold text-slate-950">{t.nextConfirmation}</span>{" "}
-                    {decisionText?.nextConfirmation}
-                  </p>
-                  <p className="mt-3">
-                    <span className="font-semibold text-slate-950">{t.beginnerNote}</span>{" "}
-                    {decisionText?.beginnerExplanation}
-                  </p>
-                </div>
-
-                {strategyDecision.noTradeReason ? (
-                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <div>
-                        <div className="font-semibold">{t.noTradeReason}</div>
-                        <div>{translateMessage(strategyDecision.noTradeReason, t)}</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {strategyDecision.warnings.length > 0 ? (
-                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                    <div className="font-semibold">{t.warnings}</div>
-                    <ul className="mt-1 list-disc space-y-1 pl-4">
-                      {strategyDecision.warnings.map((warning) => (
-                        <li key={warning}>{translateMessage(warning, t)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                <div className="mt-4 rounded-md border border-slate-200 bg-panel p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="text-base font-semibold text-slate-950">{t.strategyExplanation}</div>
-                      <p className="mt-1 text-xs leading-5 text-slate-600">{t.aiExplanationNote}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={generateExplanation}
-                      disabled={isExplanationLoading || !exportPayload}
-                      className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isExplanationLoading ? t.generatingExplanation : t.generateExplanation}
-                    </button>
-                  </div>
-
-                  {explanationError ? (
-                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                      {explanationError}
-                    </div>
-                  ) : null}
-
-                  {aiExplanationResponse ? (
-                    <div className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
-                      <div className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                        {aiExplanationResponse.source === "provider" ? t.providerConfigured : t.localDeterministicExplanation}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-950">{t.simpleExplanation}</div>
-                        <p className="mt-1">{aiExplanationResponse.explanation.summary}</p>
-                      </div>
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div>
-                          <div className="font-semibold text-slate-950">{t.whatTheSystemSaw}</div>
-                          <ul className="mt-1 list-disc space-y-1 pl-4">
-                            {aiExplanationResponse.explanation.whatTheSystemSaw.map((item) => (
-                              <li key={item}>{translateMessage(item, t)}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-950">{t.whyThisDecision}</div>
-                          <ul className="mt-1 list-disc space-y-1 pl-4">
-                            {aiExplanationResponse.explanation.whyThisDecision.map((item) => (
-                              <li key={item}>{translateMessage(item, t)}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-950">{t.riskExplanation}</div>
-                        <p className="mt-1">{translateMessage(aiExplanationResponse.explanation.riskExplanation, t)}</p>
-                      </div>
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div>
-                          <div className="font-semibold text-slate-950">{t.whatToWatchNext}</div>
-                          <ul className="mt-1 list-disc space-y-1 pl-4">
-                            {aiExplanationResponse.explanation.whatToWatchNext.map((item) => (
-                              <li key={item}>{translateMessage(item, t)}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-950">{t.limitations}</div>
-                          <ul className="mt-1 list-disc space-y-1 pl-4">
-                            {aiExplanationResponse.explanation.limitations.map((item) => (
-                              <li key={item}>{translateMessage(item, t)}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                      <p className="rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
-                        {aiExplanationResponse.explanation.notFinancialAdvice}
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <MetricTile label={t.stopLoss} value={formatCurrency(strategy.stopLoss, pricePrecision)} tone="negative" />
-                  <MetricTile label={t.trailingExit} value={formatCurrency(strategy.takeProfit, pricePrecision)} tone="positive" />
-                </div>
-
-                {backtestResult ? (
-                  <div className="mt-4 rounded-md border border-slate-200 bg-panel p-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="text-base font-semibold text-slate-950">{t.simpleBacktest}</div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {t.backtestSourceLabels[backtestResult.backtestSource]}
-                      </div>
-                    </div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <MetricTile label={t.backtestSource} value={t.backtestSourceLabels[backtestResult.backtestSource]} />
-                      <MetricTile label={t.candlesUsed} value={String(backtestResult.candlesUsed)} />
-                      <MetricTile label={t.entryTriggered} value={backtestResult.entryTriggered ? t.yes : t.no} />
-                      <MetricTile label={t.stopHit} value={backtestResult.stopHit ? t.yes : t.no} tone={backtestResult.stopHit ? "negative" : "positive"} />
-                      <MetricTile label={t.trailingExitHit} value={backtestResult.trailingExitHit ? t.yes : t.no} tone={backtestResult.trailingExitHit ? "positive" : "default"} />
-                      <MetricTile label={t.backtestResult} value={t.winLossLabels[backtestResult.winLossResult]} tone={backtestResult.winLossResult === "win" ? "positive" : backtestResult.winLossResult === "loss" ? "negative" : "warning"} />
-                      <MetricTile label={t.returnPercentage} value={formatPercentage(backtestResult.grossReturnPercentage)} tone={backtestResult.grossReturnPercentage >= 0 ? "positive" : "negative"} />
-                      <MetricTile label={t.estimatedPnl} value={formatCurrency(backtestResult.estimatedPnL)} tone={backtestResult.estimatedPnL >= 0 ? "positive" : "negative"} />
-                      <MetricTile label={t.maxDrawdown} value={formatPercentage(backtestResult.maxDrawdownPercentage)} tone={backtestResult.maxDrawdownPercentage < 0 ? "negative" : "default"} />
-                    </div>
-                    <div className="mt-3 rounded-md border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
-                      <div className="font-semibold text-slate-950">{t.limitations}</div>
-                      <ul className="mt-1 list-disc space-y-1 pl-4">
-                        {backtestResult.limitations.map((limitation) => (
-                          <li key={limitation}>{translateMessage(limitation, t)}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                ) : null}
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">

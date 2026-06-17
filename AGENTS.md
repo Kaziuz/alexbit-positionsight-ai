@@ -10,6 +10,7 @@ Crypto Intelligence / Strategy Skills.
 This is not a live on-chain trading agent.
 It does not execute trades.
 It does not connect wallets.
+It does not place exchange orders.
 It does not sign transactions.
 The agent address can be submitted as N/A.
 
@@ -22,7 +23,7 @@ It must not present output as financial advice.
 
 ## Security rules
 
-Never commit .env.local.
+Never modify, print, commit, or export .env.local.
 Never print or expose CMC_API_KEY.
 CoinMarketCap API calls must remain server-side only.
 Client components must never access secrets.
@@ -83,7 +84,11 @@ Keep StrategySpec and export JSON backward-compatible unless explicitly requeste
 Prefer adding wrapper fields over breaking existing shapes.
 Keep mock fallback working.
 Keep CMC live quote working.
-Run lint, typecheck, and build after meaningful changes.
+After meaningful changes, run:
+- npm run lint
+- npm run typecheck
+- npm run build
+- npm run test:e2e
 Do not commit unless explicitly instructed.
 
 ## Testing rules
@@ -98,6 +103,7 @@ Testing dependencies are allowed when explicitly requested.
 For controlled token validation passes, keep coverage lightweight and deterministic.
 Use Playwright smoke tests for token selection, intent selection, language switching, chart markers, risk badge visibility, simple backtest visibility, and JSON export shape.
 Do not fail validation only because CoinMarketCap historical OHLCV is unavailable on the active plan; require the UI/export to label estimated or fallback data honestly.
+Before final submission, run the QA release checklist across English/Spanish UI, 3 position intents, 6 timeframes, chart markers, Strategy Panel, Scanner, JSON export, and the 10-token matrix.
 Before handoff after meaningful validation changes, run:
 - npm run lint
 - npm run typecheck
