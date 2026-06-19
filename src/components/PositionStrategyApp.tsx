@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   CartesianGrid,
   Line,
@@ -410,6 +410,14 @@ function getAdjustedLevelLabels(levels: Array<{ key: string; label: string; colo
     }, []);
 }
 
+function getPaperPricePrecision(value: number) {
+  return Math.abs(value) < 1 ? 5 : 2;
+}
+
+function formatPaperReferenceLabel(label: string, value: number) {
+  return `${label} · ${formatCurrency(value, getPaperPricePrecision(value))}`;
+}
+
 function PaperCandlestickChart({
   result,
   t,
@@ -419,6 +427,8 @@ function PaperCandlestickChart({
   t: TranslationSet;
   referenceLevels: Array<{ key: string; label: string; value: number; color: string }>;
 }) {
+  const [activeCandleIndex, setActiveCandleIndex] = useState<number | null>(null);
+  const [tooltipPoint, setTooltipPoint] = useState<{ x: number; y: number } | null>(null);
   const candles = useMemo(() => {
     const maxCandles = 80;
     const step = Math.max(Math.ceil(result.candles.length / maxCandles), 1);
@@ -456,7 +466,7 @@ function PaperCandlestickChart({
   const adjustedLabels = getAdjustedLevelLabels(
     referenceLevels.map((level) => ({
       key: level.key,
-      label: level.label,
+      label: formatPaperReferenceLabel(level.label, level.value),
       color: level.color,
       y: yForPrice(level.value),
     })),
@@ -464,9 +474,43 @@ function PaperCandlestickChart({
     ...level,
     y: Math.min(Math.max(level.y, plotTop + 8), plotBottom - 8),
   }));
+  const activeCandle = activeCandleIndex === null ? null : candles[activeCandleIndex] ?? null;
+  const tooltipX = tooltipPoint ? Math.min(Math.max(tooltipPoint.x + 16, plotLeft + 8), width - 250) : 0;
+  const tooltipY = tooltipPoint ? Math.min(Math.max(tooltipPoint.y - 18, plotTop + 8), height - 174) : 0;
+
+  function handleMouseMove(event: MouseEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const localX = ((event.clientX - rect.left) / rect.width) * width;
+    const localY = ((event.clientY - rect.top) / rect.height) * height;
+
+    if (localX < plotLeft || localX > plotRight || localY < plotTop || localY > plotBottom) {
+      setActiveCandleIndex(null);
+      setTooltipPoint(null);
+      return;
+    }
+
+    const rawIndex =
+      candles.length === 1
+        ? 0
+        : Math.round(((localX - plotLeft) / Math.max(plotWidth, 1)) * (candles.length - 1));
+    const nextIndex = Math.min(Math.max(rawIndex, 0), candles.length - 1);
+
+    setActiveCandleIndex(nextIndex);
+    setTooltipPoint({ x: localX, y: localY });
+  }
 
   return (
-    <svg className="h-full w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t.paperBacktestChart}>
+    <svg
+      className="h-full w-full"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={t.paperBacktestChart}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => {
+        setActiveCandleIndex(null);
+        setTooltipPoint(null);
+      }}
+    >
       <rect x="0" y="0" width={width} height={height} rx="8" fill="#f8fafc" />
       {yTicks.map((tick) => {
         const y = yForPrice(tick);
@@ -489,13 +533,13 @@ function PaperCandlestickChart({
         return (
           <line
             key={level.key}
+            data-reference-level={level.key}
             x1={plotLeft}
             x2={plotRight}
             y1={y}
             y2={y}
             stroke={level.color}
-            strokeDasharray="5 5"
-            strokeWidth="1.5"
+            strokeWidth="1.8"
           />
         );
       })}
@@ -550,6 +594,49 @@ function PaperCandlestickChart({
           </text>
         </g>
       ))}
+
+      {activeCandle && tooltipPoint ? (
+        <g pointerEvents="none">
+          <line
+            x1={xForIndex(activeCandleIndex ?? 0)}
+            x2={xForIndex(activeCandleIndex ?? 0)}
+            y1={plotTop}
+            y2={plotBottom}
+            stroke="#94a3b8"
+            strokeWidth="1"
+          />
+          <rect x={tooltipX} y={tooltipY} width="232" height="154" rx="8" fill="#ffffff" stroke="#cbd5e1" />
+          <text x={tooltipX + 12} y={tooltipY + 20} fontSize="11" fontWeight="700" fill="#0f172a">
+            {t.paperBacktestDateTime}
+          </text>
+          <text x={tooltipX + 12} y={tooltipY + 37} fontSize="11" fill="#475569">
+            {new Date(activeCandle.closeTime).toLocaleString(t.language === "Idioma" ? "es-ES" : "en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </text>
+          {[
+            [t.paperBacktestOpen, activeCandle.open],
+            [t.paperBacktestHigh, activeCandle.high],
+            [t.paperBacktestLow, activeCandle.low],
+            [t.paperBacktestClose, activeCandle.close],
+            [t.entryPrice, result.entryPrice],
+            [t.stopLoss, result.stopLoss],
+            [t.dynamicExit, result.dynamicExit],
+          ].map(([label, value], index) => (
+            <g key={label}>
+              <text x={tooltipX + 12} y={tooltipY + 57 + index * 13} fontSize="11" fill="#64748b">
+                {label}
+              </text>
+              <text x={tooltipX + 220} y={tooltipY + 57 + index * 13} textAnchor="end" fontSize="11" fontWeight="700" fill="#0f172a">
+                {typeof value === "number" ? formatCurrency(value, getPaperPricePrecision(value)) : ""}
+              </text>
+            </g>
+          ))}
+        </g>
+      ) : null}
     </svg>
   );
 }
@@ -579,6 +666,11 @@ function PaperBacktestChart({ result, t }: { result: PaperBacktestResult; t: Tra
     { key: "stop", label: t.stopLoss, value: result.stopLoss, color: "#dc2626" },
     { key: "dynamicExit", label: t.dynamicExit, value: result.dynamicExit, color: "#16a34a" },
   ];
+  const referenceLabelOffsets: Record<string, number> = {
+    entry: -14,
+    stop: 0,
+    dynamicExit: 14,
+  };
 
   if (!sampledCandles.length) {
     return null;
@@ -611,7 +703,7 @@ function PaperBacktestChart({ result, t }: { result: PaperBacktestResult; t: Tra
           {referenceLevels.map((level) => (
             <span key={level.key} className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
               <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: level.color }} />
-              {level.label}
+              {formatPaperReferenceLabel(level.label, level.value)}
             </span>
           ))}
         </div>
@@ -655,7 +747,21 @@ function PaperBacktestChart({ result, t }: { result: PaperBacktestResult; t: Tra
                 }
               />
               {referenceLevels.map((level) => (
-                <ReferenceLine key={level.key} y={level.value} stroke={level.color} strokeDasharray="5 5" />
+                <ReferenceLine
+                  key={level.key}
+                  y={level.value}
+                  stroke={level.color}
+                  strokeWidth={1.8}
+                  className="paper-reference-line"
+                  label={{
+                    value: formatPaperReferenceLabel(level.label, level.value),
+                    position: "right",
+                    fill: level.color,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    dy: referenceLabelOffsets[level.key] ?? 0,
+                  }}
+                />
               ))}
               <Line type="monotone" dataKey="close" dot={false} stroke="#334155" strokeWidth={2} isAnimationActive={false} />
               {entryEvent ? (

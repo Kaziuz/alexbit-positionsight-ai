@@ -220,8 +220,27 @@ test("paper backtest imports PositionSight JSON and keeps no-trade specs closed"
   await expect(page.getByText("View:", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Line", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Candles", exact: true })).toBeVisible();
+  await expect(page.getByText(/Entry price · \$/).first()).toBeVisible();
+  await expect(page.getByText(/Stop loss · \$/).first()).toBeVisible();
+  await expect(page.getByText(/Dynamic exit · \$/).first()).toBeVisible();
   await page.getByRole("button", { name: "Candles", exact: true }).click();
   await expect(page.getByRole("application", { name: "Paper backtest chart" })).toBeVisible();
+  await expect(page.getByText(/Entry price · \$/).first()).toBeVisible();
+  await expect(page.getByText(/Stop loss · \$/).first()).toBeVisible();
+  await expect(page.getByText(/Dynamic exit · \$/).first()).toBeVisible();
+  const candleReferenceLines = page.locator('svg[aria-label="Paper backtest chart"] line[data-reference-level]');
+  await expect(candleReferenceLines).toHaveCount(3);
+  expect(
+    await candleReferenceLines.evaluateAll((lines) =>
+      lines.map((line) => line.getAttribute("stroke-dasharray") ?? line.getAttribute("strokeDasharray")),
+    ),
+  ).toEqual([null, null, null]);
+  await page.getByRole("img", { name: "Paper backtest chart" }).hover({ position: { x: 360, y: 150 } });
+  await expect(page.getByText("Date / Time", { exact: true })).toBeVisible();
+  await expect(page.getByText("Open", { exact: true })).toBeVisible();
+  await expect(page.getByText("High", { exact: true })).toBeVisible();
+  await expect(page.getByText("Low", { exact: true })).toBeVisible();
+  await expect(page.getByText("Close", { exact: true })).toBeVisible();
   await expect(page.getByText("This is a paper simulation only.", { exact: false })).toHaveCount(1);
   await expect(page.locator("body")).not.toContainText(/connect Binance account|API key required|NEXT_PUBLIC_BINANCE_KEY/i);
 
@@ -260,9 +279,23 @@ test("paper backtest imports PositionSight JSON and keeps no-trade specs closed"
   await expect(page.getByText("Vista:", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Línea", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Velas", exact: true })).toBeVisible();
+  await expect(page.getByText(/Precio de entrada · \$/).first()).toBeVisible();
+  await expect(page.getByText(/Stop de pérdida · \$/).first()).toBeVisible();
+  await expect(page.getByText(/Salida dinámica · \$/).first()).toBeVisible();
+  await page.getByRole("button", { name: "Velas", exact: true }).click();
+  const spanishCandleChart = page.locator('svg[aria-label="Gráfico de backtest paper"], svg[aria-label="Paper backtest chart"]').last();
+  await expect(spanishCandleChart).toBeVisible();
+  await spanishCandleChart.hover({ position: { x: 360, y: 150 } });
+  await expect(page.getByText("Fecha / Hora", { exact: true })).toBeVisible();
+  await expect(page.getByText("Apertura", { exact: true })).toBeVisible();
+  await expect(page.getByText("Máximo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Mínimo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cierre", { exact: true })).toBeVisible();
   await expect(page.getByText("Esta es solo una simulación paper.", { exact: false })).toHaveCount(1);
   expect(await getNonJsonBodyText(page)).not.toContain("This is a paper simulation only.");
   expect(await getNonJsonBodyText(page)).not.toContain("Used Binance public market-data klines only.");
+  expect(await getNonJsonBodyText(page)).not.toContain("Entry price ·");
+  expect(await getNonJsonBodyText(page)).not.toContain("Open");
   await expect(page.locator("body")).not.toContainText(/connect Binance account|API key required|NEXT_PUBLIC_BINANCE_KEY/i);
 });
 
@@ -468,6 +501,7 @@ test("scanner scope supports current selected and specific token modes in Englis
   await expect(page.getByRole("button", { name: "Ocultar", exact: true })).toBeVisible();
   await expect(page.locator("div").filter({ hasText: /^TWT - Trust Wallet Token$/ }).first()).toBeVisible({ timeout: 20_000 });
   await expect.poll(async () => page.getByText("Posible movimiento a revisar", { exact: true }).count()).toBe(1);
+  await expect(page.getByRole("button", { name: "Escanear tokens", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Ocultar", exact: true }).click();
   await expect(page.getByText(/oportunidades deterministas escaneadas\. Expande para revisar las tarjetas\./)).toBeVisible();
   await page.getByRole("button", { name: "Mostrar", exact: true }).click();
@@ -745,6 +779,7 @@ test("token scanner runs deterministic scan and can load a result", async ({ pag
 
   const scannerCards = page.getByText("Possible movement to review", { exact: true });
   await expect.poll(async () => scannerCards.count()).toBeGreaterThanOrEqual(3);
+  await expect(page.getByRole("button", { name: "Scan tokens", exact: true })).toBeEnabled();
   await expect(page.getByText("Risk badge", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Intent action", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Hide", exact: true }).click();

@@ -144,6 +144,11 @@ export const translations = {
     paperBacktestView: "View",
     paperBacktestLineView: "Line",
     paperBacktestCandlesView: "Candles",
+    paperBacktestDateTime: "Date / Time",
+    paperBacktestOpen: "Open",
+    paperBacktestHigh: "High",
+    paperBacktestLow: "Low",
+    paperBacktestClose: "Close",
     noPaperResultsYet: "Paste a valid PositionSight export to run a paper simulation.",
     paperBacktestSafetyNote:
       "This is a paper simulation only. It does not place orders, sign transactions, connect wallets, or access your Binance account.",
@@ -791,6 +796,11 @@ export const translations = {
     paperBacktestView: "Vista",
     paperBacktestLineView: "Línea",
     paperBacktestCandlesView: "Velas",
+    paperBacktestDateTime: "Fecha / Hora",
+    paperBacktestOpen: "Apertura",
+    paperBacktestHigh: "Máximo",
+    paperBacktestLow: "Mínimo",
+    paperBacktestClose: "Cierre",
     noPaperResultsYet: "Pega un export válido de PositionSight para ejecutar una simulación paper.",
     paperBacktestSafetyNote:
       "Esta es solo una simulación paper. No coloca órdenes, no firma transacciones, no conecta wallets y no accede a tu cuenta de Binance.",
