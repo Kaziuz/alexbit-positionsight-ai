@@ -128,6 +128,9 @@ export const translations = {
     },
     backtestReadyJson: "Backtest-ready JSON",
     exportJson: "Export JSON",
+    copyJson: "Copy JSON",
+    copied: "Copied",
+    copyFailed: "Copy failed",
     paperBacktestTitle: "Paper Backtest from JSON",
     paperBacktestIntro:
       "Paste a PositionSight JSON export and test it against public historical candles. This is not live trading and does not connect to your exchange account.",
@@ -204,6 +207,11 @@ export const translations = {
     scannerDataSource: "Data source",
     estimatedDemoFallback: "Estimated/demo fallback",
     unavailableHistory: "History unavailable",
+    scannerResults: "Scanner results",
+    scannerShow: "Show",
+    scannerHide: "Hide",
+    scannerTokenCountSuffix: "tokens",
+    scannerCollapsedSummary: "deterministic opportunities scanned. Expand to review cards.",
     maAlignmentLabels: {
       bullish: "Bullish",
       mixed: "Mixed",
@@ -765,8 +773,11 @@ export const translations = {
       estimatedHistory:
         "La cotización más reciente viene en vivo desde CoinMarketCap. El recorrido del gráfico y los indicadores son estimados hasta que el plan permita OHLCV histórico.",
     },
-    backtestReadyJson: "JSON listo para pruebas",
+    backtestReadyJson: "JSON listo para backtesting",
     exportJson: "Exportar JSON",
+    copyJson: "Copiar JSON",
+    copied: "Copiado",
+    copyFailed: "No se pudo copiar",
     paperBacktestTitle: "Backtest paper desde JSON",
     paperBacktestIntro:
       "Pega un JSON exportado por PositionSight y pruébalo contra velas históricas públicas. Esto no es trading en vivo y no conecta tu cuenta de exchange.",
@@ -843,6 +854,11 @@ export const translations = {
     scannerDataSource: "Fuente de datos",
     estimatedDemoFallback: "Respaldo estimado/demo",
     unavailableHistory: "Histórico no disponible",
+    scannerResults: "Resultados del escáner",
+    scannerShow: "Mostrar",
+    scannerHide: "Ocultar",
+    scannerTokenCountSuffix: "tokens",
+    scannerCollapsedSummary: "oportunidades deterministas escaneadas. Expande para revisar las tarjetas.",
     maAlignmentLabels: {
       bullish: "Alcista",
       mixed: "Mixta",

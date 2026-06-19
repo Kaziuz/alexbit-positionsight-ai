@@ -166,6 +166,9 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Gestionar posición abierta", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Revisar salida / venta", exact: true })).toBeVisible();
   await expect(page.locator("pre")).toContainText('"schemaVersion"', { timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Copiar JSON", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copiar JSON", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Copiado", exact: true })).toBeVisible();
   await expect(page.getByText("Nivel de riesgo", { exact: true })).toBeVisible();
   await expect(page.getByText("Ajuste de estrategia", { exact: true })).toBeVisible();
   await expect(page.getByText("Modo de tamaño", { exact: true })).toBeVisible();
@@ -195,6 +198,9 @@ test("paper backtest imports PositionSight JSON and keeps no-trade specs closed"
   const payload = await getCompleteExportJson(page);
   const rawJson = await page.locator("pre").innerText();
 
+  await expect(page.getByRole("button", { name: "Copy JSON", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copy JSON", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Export JSON", exact: true }).click();
   await page.getByRole("button", { name: "Paper Backtest", exact: true }).click();
 
@@ -379,7 +385,7 @@ test("day 10, 11, and 13 validation matrix covers requested tokens, intents, lan
       chartTitle: "Entrada vs precio actual",
       riskBadge: "Nivel de riesgo",
       backtest: "Prueba simple",
-      export: "JSON listo para pruebas",
+      export: "JSON listo para backtesting",
       chartPathNote: /recorrido del gráfico|velas históricas|datos demo/i,
       chartMarkers: ["Stop", "Entrada", "Actual", "Salida dinámica"],
       intentLabels: {
@@ -458,8 +464,14 @@ test("scanner scope supports current selected and specific token modes in Englis
   await alcanceSelect.selectOption("specific");
   await page.getByRole("combobox", { name: "Token específico", exact: true }).selectOption("TWT");
   await page.getByRole("button", { name: "Escanear tokens", exact: true }).click();
+  await expect(page.getByText("Resultados del escáner", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Ocultar", exact: true })).toBeVisible();
   await expect(page.locator("div").filter({ hasText: /^TWT - Trust Wallet Token$/ }).first()).toBeVisible({ timeout: 20_000 });
   await expect.poll(async () => page.getByText("Posible movimiento a revisar", { exact: true }).count()).toBe(1);
+  await page.getByRole("button", { name: "Ocultar", exact: true }).click();
+  await expect(page.getByText(/oportunidades deterministas escaneadas\. Expande para revisar las tarjetas\./)).toBeVisible();
+  await page.getByRole("button", { name: "Mostrar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Cargar en análisis principal", exact: true })).toBeVisible();
 
   await page.locator("form select").selectOption("CAKE");
   await expect(page.locator("pre")).toContainText('"asset": "CAKE"', { timeout: 20_000 });
@@ -727,12 +739,19 @@ test("token scanner runs deterministic scan and can load a result", async ({ pag
   }
 
   await page.getByRole("button", { name: "Scan tokens", exact: true }).click();
+  await expect(page.getByText("Scanner results", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Hide", exact: true })).toBeVisible();
   await expect(page.getByText("Possible movement to review", { exact: true }).first()).toBeVisible();
 
   const scannerCards = page.getByText("Possible movement to review", { exact: true });
   await expect.poll(async () => scannerCards.count()).toBeGreaterThanOrEqual(3);
   await expect(page.getByText("Risk badge", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Intent action", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Hide", exact: true }).click();
+  await expect(page.getByText(/deterministic opportunities scanned\. Expand to review cards\./)).toBeVisible();
+  await expect(page.getByText("Possible movement to review", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Show", exact: true }).click();
+  await expect(page.getByText("Possible movement to review", { exact: true }).first()).toBeVisible();
   const firstScannerCard = page
     .getByText("Possible movement to review", { exact: true })
     .first()

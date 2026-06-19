@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   BarChart3,
   Braces,
+  Copy,
   Download,
   Info,
   Play,
@@ -133,6 +134,7 @@ type ScannerUniverse = "beginner" | "advanced" | "all";
 type ScannerScope = "current" | "specific" | "group";
 type MainTab = "strategy_builder" | "paper_backtest";
 type PaperBacktestChartView = "line" | "candles";
+type CopyJsonStatus = "idle" | "copied" | "failed";
 type ExplainApiResponse = {
   source: Exclude<AiExplanationSource, "not_generated">;
   provider: string;
@@ -701,7 +703,9 @@ export function PositionStrategyApp() {
   const [scannerResults, setScannerResults] = useState<ScannerResult[]>([]);
   const [isScannerLoading, setIsScannerLoading] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scannerResultsOpen, setScannerResultsOpen] = useState(false);
   const [lastExportedJson, setLastExportedJson] = useState("");
+  const [copyJsonStatus, setCopyJsonStatus] = useState<CopyJsonStatus>("idle");
   const [paperJsonInput, setPaperJsonInput] = useState("");
   const [paperBacktestResult, setPaperBacktestResult] = useState<PaperBacktestResult | null>(null);
   const [paperBacktestError, setPaperBacktestError] = useState<string | null>(null);
@@ -1259,15 +1263,63 @@ export function PositionStrategyApp() {
 
         results.push(...batchResults.filter((result): result is ScannerResult => result !== null));
         setScannerResults([...results]);
+        if (results.length) {
+          setScannerResultsOpen(true);
+        }
       }
 
       if (!results.length) {
         setScannerError(t.scannerNoResults);
+      } else {
+        setScannerResultsOpen(true);
       }
     } catch {
       setScannerError(t.scannerFailed);
     } finally {
       setIsScannerLoading(false);
+    }
+  }
+
+  async function copyStrategyJson() {
+    if (!strategyJson) {
+      return;
+    }
+
+    function copyWithTextareaFallback() {
+      const textarea = document.createElement("textarea");
+      textarea.value = strategyJson;
+      textarea.setAttribute("readonly", "true");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      const copied = document.execCommand("copy");
+      document.body.removeChild(textarea);
+
+      if (!copied) {
+        throw new Error("Copy command failed.");
+      }
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(strategyJson);
+        } catch {
+          copyWithTextareaFallback();
+        }
+      } else {
+        copyWithTextareaFallback();
+      }
+
+      setCopyJsonStatus("copied");
+    } catch {
+      setCopyJsonStatus("failed");
+    } finally {
+      window.setTimeout(() => setCopyJsonStatus("idle"), 1800);
     }
   }
 
@@ -2031,51 +2083,77 @@ export function PositionStrategyApp() {
             ) : null}
 
             {scannerResults.length ? (
-              <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                {scannerResults.map((result) => (
-                  <div key={result.symbol} className="rounded-lg border border-slate-200 bg-panel p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          {t.possibleMovementToReview}
-                        </div>
-                        <div className="mt-1 text-lg font-semibold text-slate-950">
-                          {result.symbol} - {result.name}
-                        </div>
-                        <p className="mt-1 text-sm leading-5 text-slate-600">{translateMessage(result.reason, t)}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => loadScannerResult(result)}
-                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-                      >
-                        {t.loadInMainAnalysis}
-                      </button>
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      <MetricTile label={t.currentPrice} value={formatCurrency(result.price, result.price < 1 ? 6 : 2)} />
-                      <MetricTile
-                        label={t.move24h}
-                        value={formatPercentage(result.percentChange24h)}
-                        tone={result.percentChange24h < 0 ? "negative" : "positive"}
-                      />
-                      <MetricTile label={t.trend} value={<TrendIcon state={result.trendState} t={t} />} />
-                      <MetricTile label="RSI 14" value={result.rsi14 === null ? t.notEnoughHistory : result.rsi14.toFixed(0)} />
-                      <MetricTile label={t.maAlignment} value={<TrendIcon state={result.maAlignment} t={t} />} />
-                      <MetricTile
-                        label={t.riskBadge}
-                        value={t.riskBadgeLabels[result.riskBadge]}
-                        tone={getRiskBadgeTone(result.riskBadge)}
-                      />
-                      <MetricTile label={t.intentAction} value={t.intentActionLabels[result.intentAction]} />
-                      <MetricTile
-                        label={t.stopStatus}
-                        value={t.stopStatusLabels[result.stopStatus]}
-                        tone={result.stopStatus === "stop_breached" ? "negative" : result.stopStatus === "near_stop" ? "warning" : "positive"}
-                      />
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-base font-semibold text-slate-950">{t.scannerResults}</div>
+                    <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {scannerResults.length} {t.scannerTokenCountSuffix}
                     </div>
                   </div>
-                ))}
+                  <button
+                    type="button"
+                    aria-expanded={scannerResultsOpen}
+                    aria-controls="scanner-results-panel"
+                    onClick={() => setScannerResultsOpen((current) => !current)}
+                    className="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                  >
+                    {scannerResultsOpen ? t.scannerHide : t.scannerShow}
+                  </button>
+                </div>
+
+                {scannerResultsOpen ? (
+                  <div id="scanner-results-panel" className="grid gap-3 border-t border-slate-200 p-4 xl:grid-cols-2">
+                    {scannerResults.map((result) => (
+                      <div key={result.symbol} className="rounded-lg border border-slate-200 bg-panel p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              {t.possibleMovementToReview}
+                            </div>
+                            <div className="mt-1 text-lg font-semibold text-slate-950">
+                              {result.symbol} - {result.name}
+                            </div>
+                            <p className="mt-1 text-sm leading-5 text-slate-600">{translateMessage(result.reason, t)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => loadScannerResult(result)}
+                            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                          >
+                            {t.loadInMainAnalysis}
+                          </button>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                          <MetricTile label={t.currentPrice} value={formatCurrency(result.price, result.price < 1 ? 6 : 2)} />
+                          <MetricTile
+                            label={t.move24h}
+                            value={formatPercentage(result.percentChange24h)}
+                            tone={result.percentChange24h < 0 ? "negative" : "positive"}
+                          />
+                          <MetricTile label={t.trend} value={<TrendIcon state={result.trendState} t={t} />} />
+                          <MetricTile label="RSI 14" value={result.rsi14 === null ? t.notEnoughHistory : result.rsi14.toFixed(0)} />
+                          <MetricTile label={t.maAlignment} value={<TrendIcon state={result.maAlignment} t={t} />} />
+                          <MetricTile
+                            label={t.riskBadge}
+                            value={t.riskBadgeLabels[result.riskBadge]}
+                            tone={getRiskBadgeTone(result.riskBadge)}
+                          />
+                          <MetricTile label={t.intentAction} value={t.intentActionLabels[result.intentAction]} />
+                          <MetricTile
+                            label={t.stopStatus}
+                            value={t.stopStatusLabels[result.stopStatus]}
+                            tone={result.stopStatus === "stop_breached" ? "negative" : result.stopStatus === "near_stop" ? "warning" : "positive"}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div id="scanner-results-panel" className="border-t border-slate-200 p-4 text-sm leading-6 text-slate-600">
+                    {scannerResults.length} {t.scannerCollapsedSummary}
+                  </div>
+                )}
               </div>
             ) : null}
           </section>
@@ -2156,24 +2234,35 @@ export function PositionStrategyApp() {
                     <Braces className="h-5 w-5 text-slate-700" />
                     {t.backtestReadyJson}
                   </div>
-                  <button
-                    type="button"
-                    disabled={!strategyJson}
-                    onClick={() => {
-                      setLastExportedJson(strategyJson);
-                      const blob = new Blob([strategyJson], { type: "application/json" });
-                      const url = URL.createObjectURL(blob);
-                      const anchor = document.createElement("a");
-                      anchor.href = url;
-                      anchor.download = `positionsight-${position.symbol}-${position.strategyTimeframe}-${strategy.strategyType}.json`;
-                      anchor.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Download className="h-4 w-4" />
-                    {t.exportJson}
-                  </button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      disabled={!strategyJson}
+                      onClick={copyStrategyJson}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copyJsonStatus === "copied" ? t.copied : copyJsonStatus === "failed" ? t.copyFailed : t.copyJson}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!strategyJson}
+                      onClick={() => {
+                        setLastExportedJson(strategyJson);
+                        const blob = new Blob([strategyJson], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const anchor = document.createElement("a");
+                        anchor.href = url;
+                        anchor.download = `positionsight-${position.symbol}-${position.strategyTimeframe}-${strategy.strategyType}.json`;
+                        anchor.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Download className="h-4 w-4" />
+                      {t.exportJson}
+                    </button>
+                  </div>
                 </div>
                 <pre className="mt-4 max-h-[640px] overflow-auto rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
                   {strategyJson}
