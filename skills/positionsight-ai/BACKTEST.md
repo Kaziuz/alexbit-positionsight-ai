@@ -1,6 +1,6 @@
 # Backtesting PositionSight AI
 
-PositionSight AI packages a Track 2 Strategy Skill artifact: a deterministic, backtest-ready JSON strategy specification. It is not a live trading bot and does not connect wallets, exchanges, or on-chain execution.
+PositionSight AI packages a Track 2 Strategy Skill artifact: a deterministic, backtest-ready JSON strategy specification. The JSON is not an order, not a trading bot, and not an instruction to execute. It is not live trading and does not connect wallets, exchange accounts, or on-chain execution.
 
 ## Run The App
 
@@ -36,6 +36,34 @@ Optional CoinMarketCap configuration lives in `.env.local`. Do not commit `.env.
 5. Use the Backtest-ready JSON panel or Export JSON button.
 
 The exported JSON is the reusable strategy-skill artifact. It includes deterministic `strategyDecision`, `strategySpec`, `marketContext`, `history.indicators`, `backtestSpec`, execution assumptions, validation, and optional explanation/scanner metadata.
+
+## Paper Backtest From JSON
+
+The app includes a separate Paper Backtest tab:
+
+1. Generate or export a PositionSight JSON artifact from Strategy Builder.
+2. Open Paper Backtest.
+3. Paste the JSON into the textarea.
+4. Run the paper backtest.
+
+Paper Backtest reads the strategy specification and requests public OHLCV candles from Binance Market Data:
+
+```text
+https://data-api.binance.vision/api/v3/klines
+```
+
+Supported symbols are mapped to USDT pairs such as `ADAUSDT`, `AVAXUSDT`, `ETHUSDT`, `BNBUSDT`, `LINKUSDT`, `CAKEUSDT`, `TWTUSDT`, `AAVEUSDT`, `UNIUSDT`, `ATOMUSDT`, `FILUSDT`, `TRXUSDT`, `XRPUSDT`, `BCHUSDT`, `LTCUSDT`, and `DOTUSDT`.
+
+The route converts PositionSight timeframes to Binance intervals:
+
+- `15m` -> `15m`
+- `30m` -> `30m`
+- `1h` -> `1h`
+- `1d` -> `1d`
+- `1w` -> `1w`
+- `1mo` -> `1M`
+
+If Binance public klines are unavailable, empty, or the symbol is not mapped, the app returns a documented `demo_fallback` result. The fallback is for interface and workflow validation only.
 
 ## How The Simple Backtest Works
 
@@ -107,6 +135,19 @@ When CoinMarketCap historical OHLCV is available, `history.source` is `coinmarke
 When CoinMarketCap historical OHLCV is unavailable because of API plan access, provider response, or missing key, the app returns `history.source: "estimated"` and labels the limitation. Estimated candles preserve demo/backtest continuity but should not be treated as real market history.
 
 When no history response reaches the simple backtest runner, it can use a small documented demo dataset. In that case `backtestSource` is `demo_dataset`.
+
+For Paper Backtest, Binance public klines are labeled as `binance_public_klines`. Demo fallback data is labeled as `demo_fallback`.
+
+## Paper Backtest Safety Limits
+
+- No Binance API keys are required.
+- No Binance API keys are requested in the UI.
+- No private credentials are read from environment variables.
+- No `NEXT_PUBLIC_BINANCE_KEY` or public credential variable is used.
+- No order, trading, account, wallet, withdrawals, user data, earnings, or balance endpoints are called.
+- Imported JSON stays in temporary client state for the current session and is not saved to local storage.
+- The simulation does not place orders, sign transactions, connect wallets, connect exchange accounts, or spend funds.
+- No-trade or `ABSTAIN` strategy specs do not open a fake position; they return capital-protection behavior.
 
 ## Track 2 Fit
 

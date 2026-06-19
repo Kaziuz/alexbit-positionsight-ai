@@ -76,6 +76,8 @@ export type OhlcvCandle = {
 export type HistorySource = "coinmarketcap" | "estimated";
 export type BacktestSource = "historical_cmc" | "demo_dataset" | "estimated_from_live_quote";
 export type BacktestWinLossResult = "win" | "loss" | "flat" | "not_triggered";
+export type PaperBacktestDataSource = "binance_public_klines" | "demo_fallback";
+export type PaperBacktestResultCode = BacktestWinLossResult | "no_trade";
 
 export type TechnicalIndicators = {
   ema20: number | null;
@@ -310,6 +312,47 @@ export type BacktestResult = {
   winLossResult: BacktestWinLossResult;
   notes: string[];
   limitations: string[];
+};
+
+export type PaperBacktestCandle = {
+  openTime: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  closeTime: string;
+};
+
+export type PaperBacktestEvent = {
+  type: "entry" | "stop" | "dynamic_exit";
+  price: number;
+  time: string;
+};
+
+export type PaperBacktestResult = {
+  symbol: string;
+  pairUsed: string;
+  timeframe: StrategyTimeframe;
+  dataSource: PaperBacktestDataSource;
+  candlesUsed: number;
+  positionIntent: PositionIntent;
+  riskBadge: RiskBadge;
+  entryPrice: number;
+  stopLoss: number;
+  dynamicExit: number;
+  entryTriggered: boolean;
+  stopHit: boolean;
+  dynamicExitHit: boolean;
+  result: PaperBacktestResultCode;
+  returnPercentage: number;
+  estimatedPnL: number;
+  maxDrawdownPercentage: number;
+  message: string;
+  notes: string[];
+  fallbackReason?: string;
+  candles: PaperBacktestCandle[];
+  events: PaperBacktestEvent[];
 };
 
 export type AiExplanationResult = {

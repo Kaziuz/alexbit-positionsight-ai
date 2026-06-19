@@ -3,8 +3,15 @@ import type {
   BacktestSource,
   HistoryResponse,
   OhlcvCandle,
+  PaperBacktestCandle,
+  PaperBacktestDataSource,
+  PaperBacktestEvent,
+  PaperBacktestResult,
   PositionInput,
+  RiskBadge,
+  StrategyExport,
   StrategySpec,
+  StrategyTimeframe,
   StrategyType,
 } from "@/types/strategy";
 
@@ -19,6 +26,65 @@ type RunSimpleBacktestInput = {
 
 function roundNumber(value: number, decimals = 4) {
   return Number.isFinite(value) ? Number(value.toFixed(decimals)) : 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isValidRiskBadge(value: unknown): value is RiskBadge {
+  return value === "low" || value === "medium" || value === "high" || value === "no_trade";
+}
+
+function isValidStrategyTimeframe(value: unknown): value is StrategyTimeframe {
+  return value === "15m" || value === "30m" || value === "1h" || value === "1d" || value === "1w" || value === "1mo";
+}
+
+const requiredPositionSightExportKeys = [
+  "schemaVersion",
+  "skill",
+  "symbol",
+  "entryPrice",
+  "positionSize",
+  "strategyTimeframe",
+  "positionIntent",
+  "strategySpec",
+  "strategyDecision",
+  "marketContext",
+  "dataProvenance",
+  "executionAssumptions",
+  "validation",
+] as const;
+
+export function isPositionSightStrategyExport(value: unknown): value is StrategyExport {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const hasRequiredKeys = requiredPositionSightExportKeys.every((key) => key in value);
+
+  if (!hasRequiredKeys || !("backtestSpec" in value || "backtestResult" in value)) {
+    return false;
+  }
+
+  const skill = value.skill;
+  const strategySpec = value.strategySpec;
+  const strategyDecision = value.strategyDecision;
+
+  return (
+    isRecord(skill) &&
+    skill.name === "positionsight-ai" &&
+    typeof value.symbol === "string" &&
+    typeof value.entryPrice === "number" &&
+    typeof value.positionSize === "number" &&
+    isValidStrategyTimeframe(value.strategyTimeframe) &&
+    isRecord(strategySpec) &&
+    isRecord(strategyDecision) &&
+    isRecord(value.marketContext) &&
+    isRecord(value.dataProvenance) &&
+    isRecord(value.executionAssumptions) &&
+    isRecord(value.validation)
+  );
 }
 
 function getBacktestSource(history: HistoryResponse | null | undefined): BacktestSource {
@@ -213,5 +279,263 @@ export function runSimpleBacktest(input: RunSimpleBacktestInput): BacktestResult
     winLossResult,
     notes,
     limitations: getLimitations(source),
+  };
+}
+
+type RunPaperBacktestInput = {
+  strategyExport: StrategyExport;
+  candles?: PaperBacktestCandle[];
+  dataSource: PaperBacktestDataSource;
+  pairUsed: string;
+  fallbackReason?: string;
+};
+
+function addMinutes(date: Date, minutes: number) {
+  const next = new Date(date);
+  next.setMinutes(next.getMinutes() + minutes);
+
+  return next;
+}
+
+function getDemoCandleSpacingMinutes(timeframe: StrategyTimeframe) {
+  if (timeframe === "15m") {
+    return 15;
+  }
+
+  if (timeframe === "30m") {
+    return 30;
+  }
+
+  if (timeframe === "1h") {
+    return 60;
+  }
+
+  if (timeframe === "1w") {
+    return 60 * 24 * 7;
+  }
+
+  if (timeframe === "1mo") {
+    return 60 * 24 * 30;
+  }
+
+  return 60 * 24;
+}
+
+function createPaperDemoCandles(strategyExport: StrategyExport, count = 80): PaperBacktestCandle[] {
+  const entryPrice = strategyExport.entryPrice ?? strategyExport.strategySpec.dataUsed.entryPrice;
+  const currentPrice = strategyExport.strategySpec.dataUsed.currentPrice;
+  const stopLoss = strategyExport.strategySpec.stopLoss;
+  const dynamicExit = strategyExport.trailingExit?.initialReference ?? strategyExport.strategySpec.takeProfit;
+  const timeframe = strategyExport.strategyTimeframe ?? strategyExport.strategySpec.strategyTimeframe;
+  const baseDate = new Date(strategyExport.dataProvenance.generatedAt);
+  const safeBaseDate = Number.isNaN(baseDate.getTime()) ? new Date(0) : baseDate;
+  const spacingMinutes = getDemoCandleSpacingMinutes(timeframe);
+  const startDate = addMinutes(safeBaseDate, -spacingMinutes * count);
+  const minLevel = Math.min(entryPrice, currentPrice, stopLoss);
+  const maxLevel = Math.max(entryPrice, currentPrice, dynamicExit);
+  const range = Math.max(maxLevel - minLevel, entryPrice * 0.03, 0.00000001);
+
+  return Array.from({ length: count }, (_, index) => {
+    const progress = count === 1 ? 1 : index / (count - 1);
+    const wave = Math.sin(progress * Math.PI * 3) * range * 0.08;
+    const close = entryPrice + (currentPrice - entryPrice) * progress + wave;
+    const previousProgress = count === 1 ? 0 : Math.max(index - 1, 0) / (count - 1);
+    const open =
+      index === 0
+        ? entryPrice * 0.995
+        : entryPrice + (currentPrice - entryPrice) * previousProgress + Math.sin(previousProgress * Math.PI * 3) * range * 0.08;
+    const high = Math.max(open, close, index === Math.floor(count * 0.64) ? dynamicExit * 1.002 : close) + range * 0.025;
+    const low = Math.min(open, close, index === Math.floor(count * 0.36) ? entryPrice * 0.998 : close) - range * 0.025;
+    const openTime = addMinutes(startDate, spacingMinutes * index);
+    const closeTime = addMinutes(openTime, spacingMinutes);
+
+    return {
+      openTime: openTime.toISOString(),
+      open: roundNumber(open, open < 1 ? 8 : 4),
+      high: roundNumber(high, high < 1 ? 8 : 4),
+      low: roundNumber(Math.max(low, 0.00000001), low < 1 ? 8 : 4),
+      close: roundNumber(Math.max(close, 0.00000001), close < 1 ? 8 : 4),
+      volume: roundNumber((strategyExport.marketContext.quote.volume24h || 1_000_000) / Math.max(24, count), 2),
+      closeTime: closeTime.toISOString(),
+    };
+  });
+}
+
+function getPaperNoTradeMessage(strategyExport: StrategyExport) {
+  const signal = strategyExport.backtestSpec?.signal;
+
+  if (signal === "ABSTAIN") {
+    return "capital protected / no position opened";
+  }
+
+  return "capital protected / no position opened";
+}
+
+function shouldPaperBacktestOpenPosition(strategyExport: StrategyExport) {
+  const signal = strategyExport.backtestSpec?.signal;
+  const strategyType = strategyExport.strategySpec.strategyType;
+  const decision = strategyExport.strategyDecision;
+
+  if (
+    signal === "ABSTAIN" ||
+    strategyType === "no_trade" ||
+    decision.noTradeRecommended ||
+    decision.riskBadge === "no_trade" ||
+    strategyExport.riskBadge === "no_trade"
+  ) {
+    return false;
+  }
+
+  return Boolean(
+    strategyExport.backtestSpec?.shouldOpenPosition &&
+      (signal === "LONG" || signal === "CONDITIONAL_LONG"),
+  );
+}
+
+export function runPaperBacktest(input: RunPaperBacktestInput): PaperBacktestResult {
+  const strategyExport = input.strategyExport;
+  const symbol = strategyExport.symbol ?? strategyExport.strategySpec.asset;
+  const timeframe = strategyExport.strategyTimeframe ?? strategyExport.strategySpec.strategyTimeframe;
+  const entryPrice = strategyExport.entryPrice ?? strategyExport.strategySpec.dataUsed.entryPrice;
+  const positionSize = strategyExport.positionSize ?? strategyExport.calculatedPositionSize ?? 0;
+  const stopLoss = strategyExport.strategySpec.stopLoss;
+  const dynamicExit = strategyExport.trailingExit?.initialReference ?? strategyExport.strategySpec.takeProfit;
+  const riskBadge = isValidRiskBadge(strategyExport.riskBadge)
+    ? strategyExport.riskBadge
+    : isValidRiskBadge(strategyExport.strategyDecision.riskBadge)
+      ? strategyExport.strategyDecision.riskBadge
+      : "medium";
+  const candles = input.candles?.length ? input.candles : createPaperDemoCandles(strategyExport);
+  const allowOpen = shouldPaperBacktestOpenPosition(strategyExport);
+  const notes = [
+    input.dataSource === "binance_public_klines"
+      ? "Used Binance Market Data public klines only."
+      : "Used the documented demo fallback because Binance public klines were unavailable.",
+    "Paper simulation only; no orders, wallets, exchange accounts, balances, or private credentials are used.",
+  ];
+
+  if (input.fallbackReason) {
+    notes.push(input.fallbackReason);
+  }
+
+  if (!allowOpen) {
+    return {
+      symbol,
+      pairUsed: input.pairUsed,
+      timeframe,
+      dataSource: input.dataSource,
+      candlesUsed: candles.length,
+      positionIntent: strategyExport.positionIntent,
+      riskBadge,
+      entryPrice,
+      stopLoss,
+      dynamicExit,
+      entryTriggered: false,
+      stopHit: false,
+      dynamicExitHit: false,
+      result: strategyExport.strategySpec.strategyType === "no_trade" || riskBadge === "no_trade" ? "no_trade" : "not_triggered",
+      returnPercentage: 0,
+      estimatedPnL: 0,
+      maxDrawdownPercentage: 0,
+      message: getPaperNoTradeMessage(strategyExport),
+      notes,
+      fallbackReason: input.fallbackReason,
+      candles,
+      events: [],
+    };
+  }
+
+  const entryIndex = candles.findIndex((candle) => candle.low <= entryPrice && candle.high >= entryPrice);
+  const entryTriggered = entryIndex >= 0;
+
+  if (!entryTriggered) {
+    return {
+      symbol,
+      pairUsed: input.pairUsed,
+      timeframe,
+      dataSource: input.dataSource,
+      candlesUsed: candles.length,
+      positionIntent: strategyExport.positionIntent,
+      riskBadge,
+      entryPrice,
+      stopLoss,
+      dynamicExit,
+      entryTriggered: false,
+      stopHit: false,
+      dynamicExitHit: false,
+      result: "not_triggered",
+      returnPercentage: 0,
+      estimatedPnL: 0,
+      maxDrawdownPercentage: 0,
+      message: "entry not triggered / no position opened",
+      notes,
+      fallbackReason: input.fallbackReason,
+      candles,
+      events: [],
+    };
+  }
+
+  const simulationCandles = candles.slice(entryIndex);
+  const events: PaperBacktestEvent[] = [
+    { type: "entry", price: entryPrice, time: candles[entryIndex]?.openTime ?? candles[0]?.openTime ?? "" },
+  ];
+  let stopHit = false;
+  let dynamicExitHit = false;
+  let exitPrice = simulationCandles.at(-1)?.close ?? entryPrice;
+
+  for (const candle of simulationCandles) {
+    if (candle.low <= stopLoss) {
+      stopHit = true;
+      exitPrice = stopLoss;
+      events.push({ type: "stop", price: stopLoss, time: candle.closeTime });
+      break;
+    }
+
+    if (candle.high >= dynamicExit) {
+      dynamicExitHit = true;
+      exitPrice = dynamicExit;
+      events.push({ type: "dynamic_exit", price: dynamicExit, time: candle.closeTime });
+      break;
+    }
+  }
+
+  const returnPercentage = ((exitPrice - entryPrice) / entryPrice) * 100;
+  const estimatedPnL = (exitPrice - entryPrice) * positionSize;
+  const worstLow = Math.min(...simulationCandles.map((candle) => candle.low), entryPrice);
+  const maxDrawdownPercentage = Math.min(((worstLow - entryPrice) / entryPrice) * 100, 0);
+  const result =
+    Math.abs(returnPercentage) < 0.01
+      ? "flat"
+      : returnPercentage > 0
+        ? "win"
+        : "loss";
+
+  return {
+    symbol,
+    pairUsed: input.pairUsed,
+    timeframe,
+    dataSource: input.dataSource,
+    candlesUsed: candles.length,
+    positionIntent: strategyExport.positionIntent,
+    riskBadge,
+    entryPrice,
+    stopLoss,
+    dynamicExit,
+    entryTriggered,
+    stopHit,
+    dynamicExitHit,
+    result,
+    returnPercentage: roundNumber(returnPercentage, 2),
+    estimatedPnL: roundNumber(estimatedPnL, 4),
+    maxDrawdownPercentage: roundNumber(maxDrawdownPercentage, 2),
+    message: stopHit
+      ? "stop loss touched in the paper simulation"
+      : dynamicExitHit
+        ? "dynamic exit touched in the paper simulation"
+        : "position marked to final candle close in the paper simulation",
+    notes,
+    fallbackReason: input.fallbackReason,
+    candles,
+    events,
   };
 }

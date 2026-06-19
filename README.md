@@ -47,6 +47,7 @@ It includes `SKILL.md`, `skill.json`, concise example strategy exports, and `BAC
 - Falls back to a local deterministic explanation when no AI provider is configured.
 - Scans eligible tokens with the deterministic strategy engine to surface possible movements to review.
 - Runs a simple deterministic backtest v1 against historical CMC candles when available, or clearly labeled estimated/demo fallback data.
+- Provides a separate Paper Backtest tab that can paste a PositionSight JSON export and test it against Binance public historical klines.
 - Displays market context, strategy fit, warnings, and next confirmation.
 - Exports a machine-readable backtest-ready JSON artifact.
 
@@ -59,6 +60,8 @@ It includes `SKILL.md`, `skill.json`, concise example strategy exports, and `BAC
 - Does not provide financial advice.
 - Does not let AI make trading decisions.
 - Does not require an AI provider to run.
+- Does not require or ask for Binance API keys.
+- Does not connect to a Binance account.
 - Does not expose API keys client-side.
 - Does not require an on-chain agent address.
 
@@ -158,9 +161,19 @@ Behavior:
 - `debug=1` includes safe diagnostics such as request mode, CMC ID, HTTP status, and parser status.
 - Diagnostics never include the API key.
 
+Paper backtesting from an exported PositionSight JSON artifact is available through:
+
+```text
+POST /api/backtest/binance
+```
+
+This route accepts the generated strategy JSON and uses Binance Market Data public klines from `https://data-api.binance.vision/api/v3/klines` only. It does not use private Binance credentials, does not read balances, does not place orders, and does not call account, wallet, withdrawals, user data, earnings, or trading endpoints. If Binance public klines are unavailable or the token has no supported USDT mapping, the route returns a clearly labeled `demo_fallback` paper simulation.
+
 ## Export Artifact
 
 The JSON export is designed as a backtest-ready strategy artifact.
+
+The JSON is not an order, not a trading bot, and not an instruction to execute. It is a strategy specification for review, explanation, and paper/backtest tooling.
 
 It includes:
 
@@ -232,6 +245,7 @@ The export preserves both human-readable strategy explanations and machine-reada
 - Simple Backtest panel.
 - Market context panel.
 - Backtest-ready JSON export.
+- Paper Backtest tab for pasted PositionSight JSON using Binance public klines or documented demo fallback.
 - Data provenance.
 - Execution assumptions.
 - Evaluation metrics.
@@ -249,6 +263,7 @@ As of the Day 11 + Day 10 + Day 13 validation pass, the MVP supports:
 - Exportable strategy skill JSON with strategy, market, history/indicator, backtest, execution-assumption, and validation metadata.
 - English and Spanish UI labels, warnings, badges, strategy explanation copy, and controls.
 - No live trading, no wallet connection, no transaction signing, no exchange execution, and no short selling.
+- Paper Backtest uses public OHLCV market data only and does not require Binance API keys.
 
 The requested validation matrix covers BNB, ETH, LINK, AVAX, CAKE, TWT, AAVE, UNI, ATOM, and FIL across all three position intents and both supported UI languages. Details are recorded in `docs/day-11-token-validation.md`.
 
@@ -258,6 +273,8 @@ The requested validation matrix covers BNB, ETH, LINK, AVAX, CAKE, TWT, AAVE, UN
 - Never expose `CMC_API_KEY` in browser or client code.
 - Never expose `AI_API_KEY` in browser or client code.
 - CoinMarketCap API requests happen server-side only.
+- Binance paper backtest requests use public market-data klines only.
+- Do not add Binance private API keys, `NEXT_PUBLIC_BINANCE_KEY`, order routes, account routes, wallet routes, withdrawal routes, user-data routes, earnings routes, or balance access.
 - AI explanation provider requests happen server-side only.
 - The AI explanation layer must not create or override trading decisions, prices, entries, exits, signals, or risk levels.
 - The app does not place trades or request wallet permissions.

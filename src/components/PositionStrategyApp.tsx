@@ -7,12 +7,24 @@ import {
   Braces,
   Download,
   Info,
+  Play,
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { beginnerTokenSet, eligibleTokenUniverse } from "@/data/eligible-tokens";
-import { runSimpleBacktest } from "@/lib/backtest";
+import { isPositionSightStrategyExport, runSimpleBacktest } from "@/lib/backtest";
 import { formatCompact, formatCurrency, formatPercentage } from "@/lib/format";
 import { languageLabels, translations, type Language } from "@/lib/i18n";
 import { parseLocalizedNumberInput } from "@/lib/number-input";
@@ -27,6 +39,7 @@ import type {
   MarketContext,
   MarketQuote,
   HistoryResponse,
+  PaperBacktestResult,
   PositionIntent,
   PositionInput,
   RiskBadge,
@@ -118,6 +131,8 @@ type TrendIconState = "bullish" | "bearish" | "neutral" | "mixed" | "unavailable
 type TranslationSet = (typeof translations)[Language];
 type ScannerUniverse = "beginner" | "advanced" | "all";
 type ScannerScope = "current" | "specific" | "group";
+type MainTab = "strategy_builder" | "paper_backtest";
+type PaperBacktestChartView = "line" | "candles";
 type ExplainApiResponse = {
   source: Exclude<AiExplanationSource, "not_generated">;
   provider: string;
@@ -359,8 +374,310 @@ function LabelWithInfo({ label, tooltip }: { label: string; tooltip: string }) {
   );
 }
 
+function getLocalizedPaperBacktestMessage(result: PaperBacktestResult, t: TranslationSet) {
+  if (!result.entryTriggered && result.result === "not_triggered") {
+    return t.paperBacktestMessageLabels.entryNotTriggered;
+  }
+
+  if (!result.entryTriggered || result.result === "no_trade") {
+    return t.paperBacktestMessageLabels.noPositionOpened;
+  }
+
+  if (result.stopHit) {
+    return t.paperBacktestMessageLabels.stopHit;
+  }
+
+  if (result.dynamicExitHit) {
+    return t.paperBacktestMessageLabels.dynamicExitHit;
+  }
+
+  return t.paperBacktestMessageLabels.markedToFinalClose;
+}
+
+function getAdjustedLevelLabels(levels: Array<{ key: string; label: string; color: string; y: number }>) {
+  return [...levels]
+    .sort((left, right) => left.y - right.y)
+    .reduce<Array<{ key: string; label: string; color: string; y: number }>>((adjusted, level) => {
+      const previous = adjusted.at(-1);
+      const minGap = 18;
+      const y = previous ? Math.max(level.y, previous.y + minGap) : level.y;
+
+      adjusted.push({ ...level, y });
+
+      return adjusted;
+    }, []);
+}
+
+function PaperCandlestickChart({
+  result,
+  t,
+  referenceLevels,
+}: {
+  result: PaperBacktestResult;
+  t: TranslationSet;
+  referenceLevels: Array<{ key: string; label: string; value: number; color: string }>;
+}) {
+  const candles = useMemo(() => {
+    const maxCandles = 80;
+    const step = Math.max(Math.ceil(result.candles.length / maxCandles), 1);
+
+    return result.candles.filter((_, index) => index % step === 0 || index === result.candles.length - 1);
+  }, [result.candles]);
+
+  if (!candles.length) {
+    return null;
+  }
+
+  const width = 920;
+  const height = 320;
+  const margin = { top: 18, right: 150, bottom: 34, left: 70 };
+  const plotLeft = margin.left;
+  const plotRight = width - margin.right;
+  const plotTop = margin.top;
+  const plotBottom = height - margin.bottom;
+  const plotWidth = plotRight - plotLeft;
+  const plotHeight = plotBottom - plotTop;
+  const rawMin = Math.min(...candles.map((candle) => candle.low), ...referenceLevels.map((level) => level.value));
+  const rawMax = Math.max(...candles.map((candle) => candle.high), ...referenceLevels.map((level) => level.value));
+  const padding = Math.max((rawMax - rawMin) * 0.08, rawMax * 0.002, 0.00000001);
+  const minPrice = Math.max(rawMin - padding, 0.00000001);
+  const maxPrice = rawMax + padding;
+  const priceRange = Math.max(maxPrice - minPrice, 0.00000001);
+  const xForIndex = (index: number) => plotLeft + (candles.length === 1 ? plotWidth / 2 : (index / (candles.length - 1)) * plotWidth);
+  const yForPrice = (price: number) => plotBottom - ((price - minPrice) / priceRange) * plotHeight;
+  const candleSlot = candles.length > 1 ? plotWidth / candles.length : plotWidth;
+  const candleBodyWidth = Math.max(Math.min(candleSlot * 0.58, 9), 2);
+  const yTicks = [maxPrice, (maxPrice + minPrice) / 2, minPrice];
+  const xTickIndexes = [0, Math.floor((candles.length - 1) / 2), candles.length - 1].filter(
+    (value, index, array) => array.indexOf(value) === index,
+  );
+  const adjustedLabels = getAdjustedLevelLabels(
+    referenceLevels.map((level) => ({
+      key: level.key,
+      label: level.label,
+      color: level.color,
+      y: yForPrice(level.value),
+    })),
+  ).map((level) => ({
+    ...level,
+    y: Math.min(Math.max(level.y, plotTop + 8), plotBottom - 8),
+  }));
+
+  return (
+    <svg className="h-full w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t.paperBacktestChart}>
+      <rect x="0" y="0" width={width} height={height} rx="8" fill="#f8fafc" />
+      {yTicks.map((tick) => {
+        const y = yForPrice(tick);
+
+        return (
+          <g key={tick}>
+            <line x1={plotLeft} x2={plotRight} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="4 4" />
+            <text x={plotLeft - 10} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">
+              {formatCurrency(tick, tick < 1 ? 5 : 2)}
+            </text>
+          </g>
+        );
+      })}
+      <line x1={plotLeft} x2={plotLeft} y1={plotTop} y2={plotBottom} stroke="#cbd5e1" />
+      <line x1={plotLeft} x2={plotRight} y1={plotBottom} y2={plotBottom} stroke="#cbd5e1" />
+
+      {referenceLevels.map((level) => {
+        const y = yForPrice(level.value);
+
+        return (
+          <line
+            key={level.key}
+            x1={plotLeft}
+            x2={plotRight}
+            y1={y}
+            y2={y}
+            stroke={level.color}
+            strokeDasharray="5 5"
+            strokeWidth="1.5"
+          />
+        );
+      })}
+
+      {candles.map((candle, index) => {
+        const x = xForIndex(index);
+        const openY = yForPrice(candle.open);
+        const closeY = yForPrice(candle.close);
+        const highY = yForPrice(candle.high);
+        const lowY = yForPrice(candle.low);
+        const isPositive = candle.close >= candle.open;
+        const color = isPositive ? "#16a34a" : "#dc2626";
+        const bodyTop = Math.min(openY, closeY);
+        const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
+
+        return (
+          <g key={`${candle.openTime}-${index}`}>
+            <line x1={x} x2={x} y1={highY} y2={lowY} stroke={color} strokeWidth="1.4" />
+            <rect
+              x={x - candleBodyWidth / 2}
+              y={bodyTop}
+              width={candleBodyWidth}
+              height={bodyHeight}
+              rx="1"
+              fill={isPositive ? "#dcfce7" : "#fee2e2"}
+              stroke={color}
+              strokeWidth="1.2"
+            />
+          </g>
+        );
+      })}
+
+      {xTickIndexes.map((index) => {
+        const candle = candles[index];
+        const x = xForIndex(index);
+
+        return (
+          <text key={candle.closeTime} x={x} y={height - 10} textAnchor="middle" fontSize="11" fill="#64748b">
+            {new Date(candle.closeTime).toLocaleDateString(t.language === "Idioma" ? "es-ES" : "en-US", {
+              month: "short",
+              day: "numeric",
+            })}
+          </text>
+        );
+      })}
+
+      {adjustedLabels.map((level) => (
+        <g key={level.key}>
+          <line x1={plotRight + 4} x2={plotRight + 14} y1={level.y} y2={level.y} stroke={level.color} strokeWidth="2" />
+          <text x={plotRight + 18} y={level.y + 4} fontSize="11" fontWeight="600" fill={level.color}>
+            {level.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function PaperBacktestChart({ result, t }: { result: PaperBacktestResult; t: TranslationSet }) {
+  const [chartView, setChartView] = useState<PaperBacktestChartView>("line");
+  const sampledCandles = useMemo(() => {
+    const maxPoints = 120;
+    const step = Math.max(Math.ceil(result.candles.length / maxPoints), 1);
+
+    return result.candles
+      .filter((_, index) => index % step === 0 || index === result.candles.length - 1)
+      .map((candle) => ({
+        time: new Date(candle.closeTime).getTime(),
+        close: candle.close,
+        label: new Date(candle.closeTime).toLocaleDateString(t.language === "Idioma" ? "es-ES" : "en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+      }));
+  }, [result.candles, t.language]);
+  const entryEvent = result.events.find((event) => event.type === "entry");
+  const stopEvent = result.events.find((event) => event.type === "stop");
+  const dynamicExitEvent = result.events.find((event) => event.type === "dynamic_exit");
+  const referenceLevels = [
+    { key: "entry", label: t.entryPrice, value: result.entryPrice, color: "#0284c7" },
+    { key: "stop", label: t.stopLoss, value: result.stopLoss, color: "#dc2626" },
+    { key: "dynamicExit", label: t.dynamicExit, value: result.dynamicExit, color: "#16a34a" },
+  ];
+
+  if (!sampledCandles.length) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+          <span>{t.paperBacktestView}:</span>
+          {([
+            ["line", t.paperBacktestLineView],
+            ["candles", t.paperBacktestCandlesView],
+          ] as const).map(([view, label]) => (
+            <button
+              key={view}
+              type="button"
+              onClick={() => setChartView(view)}
+              className={`h-8 rounded-md border px-3 text-xs font-semibold transition ${
+                chartView === view
+                  ? "border-sky-700 bg-sky-700 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {referenceLevels.map((level) => (
+            <span key={level.key} className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
+              <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: level.color }} />
+              {level.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="h-[320px]" role="application" aria-label={t.paperBacktestChart}>
+        {chartView === "line" ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={sampledCandles} margin={{ top: 12, right: 18, bottom: 8, left: 2 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="time"
+                type="number"
+                domain={["dataMin", "dataMax"]}
+                tickFormatter={(value) =>
+                  new Date(Number(value)).toLocaleDateString(t.language === "Idioma" ? "es-ES" : "en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                }
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                axisLine={{ stroke: "#cbd5e1" }}
+                tickLine={{ stroke: "#cbd5e1" }}
+              />
+              <YAxis
+                width={72}
+                tickFormatter={(value) => formatCurrency(Number(value), Number(value) < 1 ? 5 : 2)}
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                axisLine={{ stroke: "#cbd5e1" }}
+                tickLine={{ stroke: "#cbd5e1" }}
+              />
+              <Tooltip
+                formatter={(value) => [formatCurrency(Number(value), Number(value) < 1 ? 6 : 2), t.currentPrice]}
+                labelFormatter={(value) =>
+                  new Date(Number(value)).toLocaleString(t.language === "Idioma" ? "es-ES" : "en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                }
+              />
+              {referenceLevels.map((level) => (
+                <ReferenceLine key={level.key} y={level.value} stroke={level.color} strokeDasharray="5 5" />
+              ))}
+              <Line type="monotone" dataKey="close" dot={false} stroke="#334155" strokeWidth={2} isAnimationActive={false} />
+              {entryEvent ? (
+                <ReferenceDot x={new Date(entryEvent.time).getTime()} y={entryEvent.price} r={5} fill="#0284c7" stroke="#ffffff" />
+              ) : null}
+              {stopEvent ? (
+                <ReferenceDot x={new Date(stopEvent.time).getTime()} y={stopEvent.price} r={5} fill="#dc2626" stroke="#ffffff" />
+              ) : null}
+              {dynamicExitEvent ? (
+                <ReferenceDot x={new Date(dynamicExitEvent.time).getTime()} y={dynamicExitEvent.price} r={5} fill="#16a34a" stroke="#ffffff" />
+              ) : null}
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <PaperCandlestickChart result={result} t={t} referenceLevels={referenceLevels} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PositionStrategyApp() {
   const [position, setPosition] = useState<PositionInput>(initialPosition);
+  const [activeTab, setActiveTab] = useState<MainTab>("strategy_builder");
   const [entryPriceInput, setEntryPriceInput] = useState(String(initialPosition.entryPrice));
   const [totalCapitalInput, setTotalCapitalInput] = useState(String(initialPosition.totalCapital));
   const [existingPositionSizeInput, setExistingPositionSizeInput] = useState("2");
@@ -384,6 +701,11 @@ export function PositionStrategyApp() {
   const [scannerResults, setScannerResults] = useState<ScannerResult[]>([]);
   const [isScannerLoading, setIsScannerLoading] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [lastExportedJson, setLastExportedJson] = useState("");
+  const [paperJsonInput, setPaperJsonInput] = useState("");
+  const [paperBacktestResult, setPaperBacktestResult] = useState<PaperBacktestResult | null>(null);
+  const [paperBacktestError, setPaperBacktestError] = useState<string | null>(null);
+  const [isPaperBacktestLoading, setIsPaperBacktestLoading] = useState(false);
   const t = translations[language];
 
   const selectedToken =
@@ -967,6 +1289,49 @@ export function PositionStrategyApp() {
     }
   }
 
+  async function runPaperBacktestFromInput() {
+    setPaperBacktestError(null);
+    setPaperBacktestResult(null);
+
+    let parsedJson: unknown;
+
+    try {
+      parsedJson = JSON.parse(paperJsonInput);
+    } catch {
+      setPaperBacktestError(t.invalidPositionSightJson);
+      return;
+    }
+
+    if (!isPositionSightStrategyExport(parsedJson)) {
+      setPaperBacktestError(t.invalidPositionSightJson);
+      return;
+    }
+
+    setIsPaperBacktestLoading(true);
+
+    try {
+      const response = await fetch("/api/backtest/binance", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ strategy: parsedJson }),
+      });
+
+      if (!response.ok) {
+        throw new Error(t.paperBacktestUnavailable);
+      }
+
+      const result = (await response.json()) as PaperBacktestResult;
+      setPaperBacktestResult(result);
+    } catch {
+      setPaperBacktestError(t.paperBacktestUnavailable);
+    } finally {
+      setIsPaperBacktestLoading(false);
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-7 px-4 py-5 sm:px-6 lg:px-8">
       <header className="border-b border-slate-200 pb-5">
@@ -1025,6 +1390,26 @@ export function PositionStrategyApp() {
         ) : null}
       </header>
 
+      <nav className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-1 shadow-soft" aria-label="PositionSight workflows">
+        {([
+          ["strategy_builder", t.strategyBuilderTab],
+          ["paper_backtest", t.paperBacktestTab],
+        ] as const).map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`min-h-10 rounded-md px-4 text-sm font-semibold transition ${
+              activeTab === tab ? "bg-sky-700 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+            }`}
+            aria-current={activeTab === tab ? "page" : undefined}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "strategy_builder" ? (
       <section className="grid gap-7 xl:grid-cols-[420px_minmax(0,1fr)]">
         <form className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
           <div className="flex items-center gap-2 text-lg font-semibold text-ink">
@@ -1775,6 +2160,7 @@ export function PositionStrategyApp() {
                     type="button"
                     disabled={!strategyJson}
                     onClick={() => {
+                      setLastExportedJson(strategyJson);
                       const blob = new Blob([strategyJson], { type: "application/json" });
                       const url = URL.createObjectURL(blob);
                       const anchor = document.createElement("a");
@@ -1797,6 +2183,130 @@ export function PositionStrategyApp() {
           ) : null}
         </div>
       </section>
+      ) : (
+        <section className="grid gap-7 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.2fr)]">
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+              <BarChart3 className="h-5 w-5 text-sky-700" />
+              {t.paperBacktestTitle}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{t.paperBacktestIntro}</p>
+
+            <label className="mt-5 block">
+              <span className="text-sm font-medium text-slate-700">{t.pastedJsonLabel}</span>
+              <textarea
+                value={paperJsonInput}
+                onChange={(event) => {
+                  setPaperJsonInput(event.target.value);
+                  setPaperBacktestError(null);
+                }}
+                className="mt-2 min-h-[420px] w-full rounded-md border border-slate-300 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                spellCheck={false}
+              />
+            </label>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={runPaperBacktestFromInput}
+                disabled={isPaperBacktestLoading || !paperJsonInput.trim()}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-sky-700 px-4 text-sm font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Play className="h-4 w-4" />
+                {isPaperBacktestLoading ? t.runningPaperBacktest : t.runPaperBacktest}
+              </button>
+              {lastExportedJson ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaperJsonInput(lastExportedJson);
+                    setPaperBacktestError(null);
+                  }}
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                >
+                  {t.useLatestExportedJson}
+                </button>
+              ) : null}
+            </div>
+
+            {paperBacktestError ? (
+              <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                {paperBacktestError}
+              </div>
+            ) : null}
+
+          </div>
+
+          <div className="space-y-6">
+            {paperBacktestResult ? (
+              <>
+                <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="text-lg font-semibold text-ink">{t.paperBacktestTab}</div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {t.paperBacktestSourceLabels[paperBacktestResult.dataSource]}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetricTile label={t.symbol} value={paperBacktestResult.symbol} />
+                    <MetricTile label={t.pairUsed} value={paperBacktestResult.pairUsed} />
+                    <MetricTile label={t.strategyTimeframe} value={t.timeframeLabels[paperBacktestResult.timeframe]} />
+                    <MetricTile label={t.dataSource} value={t.paperBacktestSourceLabels[paperBacktestResult.dataSource]} />
+                    <MetricTile label={t.candlesUsed} value={String(paperBacktestResult.candlesUsed)} />
+                    <MetricTile label={t.positionIntent} value={t.positionIntentLabels[paperBacktestResult.positionIntent]} />
+                    <MetricTile
+                      label={t.riskBadge}
+                      value={t.riskBadgeLabels[paperBacktestResult.riskBadge]}
+                      tone={getRiskBadgeTone(paperBacktestResult.riskBadge)}
+                    />
+                    <MetricTile label={t.entryPrice} value={formatCurrency(paperBacktestResult.entryPrice, paperBacktestResult.entryPrice < 1 ? 6 : 2)} />
+                    <MetricTile label={t.stopLoss} value={formatCurrency(paperBacktestResult.stopLoss, paperBacktestResult.stopLoss < 1 ? 6 : 2)} tone="negative" />
+                    <MetricTile label={t.dynamicExit} value={formatCurrency(paperBacktestResult.dynamicExit, paperBacktestResult.dynamicExit < 1 ? 6 : 2)} tone="positive" />
+                    <MetricTile label={t.entryTriggered} value={paperBacktestResult.entryTriggered ? t.yes : t.no} />
+                    <MetricTile label={t.stopHit} value={paperBacktestResult.stopHit ? t.yes : t.no} tone={paperBacktestResult.stopHit ? "negative" : "positive"} />
+                    <MetricTile label={t.dynamicExitHit} value={paperBacktestResult.dynamicExitHit ? t.yes : t.no} tone={paperBacktestResult.dynamicExitHit ? "positive" : "default"} />
+                    <MetricTile
+                      label={t.backtestResult}
+                      value={t.paperBacktestResultLabels[paperBacktestResult.result]}
+                      tone={paperBacktestResult.result === "win" ? "positive" : paperBacktestResult.result === "loss" ? "negative" : "warning"}
+                    />
+                    <MetricTile
+                      label={t.returnPercentage}
+                      value={formatPercentage(paperBacktestResult.returnPercentage)}
+                      tone={paperBacktestResult.returnPercentage >= 0 ? "positive" : "negative"}
+                    />
+                    <MetricTile
+                      label={t.estimatedPnl}
+                      value={formatCurrency(paperBacktestResult.estimatedPnL)}
+                      tone={paperBacktestResult.estimatedPnL >= 0 ? "positive" : "negative"}
+                    />
+                    <MetricTile
+                      label={t.maxDrawdown}
+                      value={formatPercentage(paperBacktestResult.maxDrawdownPercentage)}
+                      tone={paperBacktestResult.maxDrawdownPercentage < 0 ? "negative" : "default"}
+                    />
+                  </div>
+
+                  <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+                    <div className="font-semibold text-slate-950">{getLocalizedPaperBacktestMessage(paperBacktestResult, t)}</div>
+                    <ul className="mt-2 list-disc space-y-1 pl-4">
+                      <li>{t.paperBacktestSourceNoteLabels[paperBacktestResult.dataSource]}</li>
+                      <li>{t.paperBacktestSafetyNote}</li>
+                    </ul>
+                  </div>
+                </section>
+
+                <PaperBacktestChart result={paperBacktestResult} t={t} />
+              </>
+            ) : (
+              <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-soft">
+                {t.noPaperResultsYet}
+              </section>
+            )}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

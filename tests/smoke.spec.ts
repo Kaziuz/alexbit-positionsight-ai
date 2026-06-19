@@ -91,6 +91,7 @@ async function getNonJsonBodyText(page: Page) {
   return page.locator("body").evaluate((body) => {
     const clone = body.cloneNode(true) as HTMLElement;
     clone.querySelectorAll("pre").forEach((node) => node.remove());
+    clone.querySelectorAll("textarea").forEach((node) => node.remove());
 
     return clone.innerText;
   });
@@ -158,6 +159,8 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByRole("button", { name: "English" })).toBeVisible();
   await page.getByRole("button", { name: "Español" }).click();
 
+  await expect(page.getByRole("button", { name: "Constructor de estrategia", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Backtest paper", exact: true })).toBeVisible();
   await expect(page.getByText("Temporalidad de estrategia", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Analizar entrada", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Gestionar posición abierta", exact: true })).toBeVisible();
@@ -181,6 +184,80 @@ test("language toggle switches to Spanish", async ({ page }) => {
   await expect(page.getByRole("button", { name: "1sem", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "1mes", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/mock\/proxy|proxy/i);
+});
+
+test("paper backtest imports PositionSight JSON and keeps no-trade specs closed", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/");
+
+  await expect(page.getByRole("button", { name: "Strategy Builder", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Paper Backtest", exact: true })).toBeVisible();
+  const payload = await getCompleteExportJson(page);
+  const rawJson = await page.locator("pre").innerText();
+
+  await page.getByRole("button", { name: "Export JSON", exact: true }).click();
+  await page.getByRole("button", { name: "Paper Backtest", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Paper Backtest from JSON", exact: true })).toBeVisible();
+  await expect(page.getByText("This is not live trading and does not connect to your exchange account.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use latest exported JSON", exact: true })).toBeVisible();
+  await expect(page.getByText("This is a paper simulation only.", { exact: false })).toHaveCount(0);
+
+  await page.getByLabel("PositionSight JSON export").fill(rawJson);
+  await page.getByRole("button", { name: "Run paper backtest", exact: true }).click();
+
+  await expect(page.getByText("Pair used", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Entry triggered", { exact: true })).toBeVisible();
+  await expect(page.getByText("Estimated P/L", { exact: true })).toBeVisible();
+  await expect(page.getByText("Max drawdown", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Binance public klines|Demo fallback/).first()).toBeVisible();
+  await expect(page.getByText("View:", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Line", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Candles", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Candles", exact: true }).click();
+  await expect(page.getByRole("application", { name: "Paper backtest chart" })).toBeVisible();
+  await expect(page.getByText("This is a paper simulation only.", { exact: false })).toHaveCount(1);
+  await expect(page.locator("body")).not.toContainText(/connect Binance account|API key required|NEXT_PUBLIC_BINANCE_KEY/i);
+
+  const noTradePayload = {
+    ...payload,
+    riskBadge: "no_trade",
+    noTradeRecommended: true,
+    strategySpec: {
+      ...payload.strategySpec,
+      strategyType: "no_trade",
+    },
+    strategyDecision: {
+      ...payload.strategyDecision,
+      riskBadge: "no_trade",
+      noTradeRecommended: true,
+      finalRiskVerdict: "no_trade_recommended",
+    },
+    backtestSpec: {
+      ...payload.backtestSpec,
+      signal: "ABSTAIN",
+      shouldOpenPosition: false,
+    },
+  };
+
+  await page.getByLabel("PositionSight JSON export").fill(JSON.stringify(noTradePayload, null, 2));
+  await page.getByRole("button", { name: "Run paper backtest", exact: true }).click();
+  await expect(page.getByText("No trade", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Capital protected / no position opened.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Entry triggered", { exact: true })).toBeVisible();
+  await expect(page.getByText("No", { exact: true }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Español", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Constructor de estrategia", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Backtest paper desde JSON", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ejecutar backtest paper", exact: true })).toBeVisible();
+  await expect(page.getByText("Vista:", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Línea", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Velas", exact: true })).toBeVisible();
+  await expect(page.getByText("Esta es solo una simulación paper.", { exact: false })).toHaveCount(1);
+  expect(await getNonJsonBodyText(page)).not.toContain("This is a paper simulation only.");
+  expect(await getNonJsonBodyText(page)).not.toContain("Used Binance public market-data klines only.");
+  await expect(page.locator("body")).not.toContainText(/connect Binance account|API key required|NEXT_PUBLIC_BINANCE_KEY/i);
 });
 
 test("strategy timeframe selector shows supported options", async ({ page }) => {
