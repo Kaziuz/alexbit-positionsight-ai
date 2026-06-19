@@ -26,8 +26,16 @@ function getAiBaseUrl() {
   return (process.env.AI_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
 }
 
+function getAiApiKey() {
+  return process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || "";
+}
+
 export function isAiProviderConfigured() {
-  return process.env.AI_EXPLAIN_ENABLED === "true" && Boolean(process.env.AI_API_KEY);
+  if (process.env.AI_EXPLAIN_ENABLED === "false") {
+    return false;
+  }
+
+  return Boolean(getAiApiKey() && process.env.AI_MODEL);
 }
 
 export function getAiProviderName() {
@@ -98,7 +106,7 @@ function buildProviderPayload(input: ExplainStrategyWithProviderInput) {
 export async function explainStrategyWithProvider(
   input: ExplainStrategyWithProviderInput,
 ): Promise<AiExplanationResult> {
-  const apiKey = process.env.AI_API_KEY;
+  const apiKey = getAiApiKey();
   const model = process.env.AI_MODEL;
 
   if (!apiKey || !model) {

@@ -93,8 +93,7 @@ cp .env.example .env.local
 Add your CoinMarketCap API key to `.env.local`:
 
 ```bash
-CMC_API_KEY=your_coinmarketcap_api_key_here
-CMC_API_BASE_URL=https://pro-api.coinmarketcap.com
+CMC_API_KEY=
 ```
 
 Run the development server:
@@ -112,22 +111,17 @@ Open [http://localhost:3000](http://localhost:3000).
 Required placeholder values:
 
 ```bash
-CMC_API_KEY=your_coinmarketcap_api_key_here
-CMC_API_BASE_URL=https://pro-api.coinmarketcap.com
-AI_EXPLAIN_ENABLED=false
-AI_PROVIDER=openai-compatible
-AI_BASE_URL=https://openrouter.ai/api/v1
-AI_API_KEY=your_provider_api_key_here
-AI_MODEL=your_free_or_configured_model_here
-AI_SITE_URL=http://localhost:3000
-AI_APP_NAME=PositionSight AI
+CMC_API_KEY=
+OPENROUTER_API_KEY=
+AI_PROVIDER=
+AI_MODEL=
 ```
 
 CoinMarketCap requests are made server-side only. `CMC_API_KEY` is read by Next.js API routes and is never exposed to browser/client components.
 
 The optional AI explanation layer is provider-agnostic and uses a generic OpenAI-compatible chat completions endpoint. It is not tied to ChatGPT or any single provider. Providers such as OpenRouter, Together, Groq, local gateways, or future compatible services can be swapped by changing environment variables.
 
-`AI_API_KEY` is server-side only. If `AI_EXPLAIN_ENABLED` is not `true`, `AI_API_KEY` is missing, `AI_MODEL` is missing, or the provider response fails validation, PositionSight returns a local deterministic explanation instead.
+`OPENROUTER_API_KEY` is server-side only and is optional. If no external provider key/model is configured, or the provider response fails validation, PositionSight returns a local deterministic explanation instead. `AI_PROVIDER` and `AI_MODEL` are optional unless an external explanation provider is enabled.
 
 ## API Route
 
@@ -271,13 +265,29 @@ The requested validation matrix covers BNB, ETH, LINK, AVAX, CAKE, TWT, AAVE, UN
 
 - Never commit `.env.local`.
 - Never expose `CMC_API_KEY` in browser or client code.
-- Never expose `AI_API_KEY` in browser or client code.
+- Never expose `OPENROUTER_API_KEY` in browser or client code.
+- Never use `NEXT_PUBLIC_` for private API keys.
 - CoinMarketCap API requests happen server-side only.
 - Binance paper backtest requests use public market-data klines only.
 - Do not add Binance private API keys, `NEXT_PUBLIC_BINANCE_KEY`, order routes, account routes, wallet routes, withdrawal routes, user-data routes, earnings routes, or balance access.
 - AI explanation provider requests happen server-side only.
 - The AI explanation layer must not create or override trading decisions, prices, entries, exits, signals, or risk levels.
 - The app does not place trades or request wallet permissions.
+
+## Deploy on Netlify
+
+1. Connect the repository to Netlify.
+2. Use build command `npm run build`.
+3. Keep the publish directory and framework detection on Netlify defaults for Next.js.
+4. Add private variables in Netlify Project configuration > Environment variables:
+   - `CMC_API_KEY`
+   - `OPENROUTER_API_KEY`, only if using an external AI explanation provider
+   - `AI_PROVIDER`, optional
+   - `AI_MODEL`, optional unless using an external AI explanation provider
+5. Never put private keys in `NEXT_PUBLIC_` variables.
+6. After adding or changing environment variables, trigger a redeploy.
+
+Paper Backtest uses Binance public klines only and does not require Binance keys. The deployed app does not execute orders, connect wallets, sign transactions, access Binance accounts, or read exchange balances.
 
 ## Current Limitations
 
