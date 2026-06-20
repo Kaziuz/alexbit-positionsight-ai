@@ -8,6 +8,12 @@ A CoinMarketCap-powered crypto strategy skill that converts market context and u
 
 PositionSight AI is a hackathon MVP for **BNB Hack: AI Trading Agent Edition - CoinMarketCap x Trust Wallet** on DoraHacks.
 
+## Live Demo
+
+Try PositionSight AI at [https://positioninsight.netlify.app/](https://positioninsight.netlify.app/).
+
+The app is deployed on Netlify. Users can open the live interface, analyze an eligible crypto position, generate a backtest-ready JSON strategy export, and run the paper backtest from the browser.
+
 ## Track Alignment
 
 PositionSight AI is submitted under the **Crypto Intelligence / Strategy Skills** track.
